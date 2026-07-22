@@ -1,0 +1,205 @@
+<title>LoRa Suite — Menu Icons Preview</title>
+<style>
+  :root{
+    --bg:#0a1013; --panel:#121a1f; --line:#213038; --line2:#31454f;
+    --text:#dde5ea; --muted:#8a99a3; --accent:#34d0bd; --loc:#5aa9e6; --rf:#f0a850;
+    --mono:ui-monospace,"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  .wrap{background:var(--bg); color:var(--text); font-family:var(--sans); line-height:1.6;
+    min-height:100%; -webkit-font-smoothing:antialiased;}
+  .doc{max-width:1000px; margin:0 auto; padding:clamp(20px,4vw,44px) clamp(16px,4vw,36px);
+    display:flex; flex-direction:column; gap:clamp(30px,5vw,52px);}
+  .eyebrow{font-family:var(--mono); font-size:.72rem; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 .5rem;}
+  h1{font-size:clamp(1.7rem,4.4vw,2.5rem); font-weight:700; letter-spacing:-.02em; margin:0; text-wrap:balance;}
+  h2{font-size:1.15rem; font-weight:660; letter-spacing:-.01em; margin:0 0 .2rem;}
+  .lead{color:var(--muted); max-width:64ch; margin:.6rem 0 0;}
+  .sub{color:var(--muted); font-size:.9rem; margin:.1rem 0 1.1rem;}
+  section{display:flex; flex-direction:column;}
+  hr{border:0; height:1px; background:linear-gradient(90deg,var(--line2),transparent); margin:0;}
+
+  .device{display:flex; justify-content:center; padding:18px; background:#05090b;
+    border:1px solid var(--line); border-radius:12px;}
+  .device canvas{width:100%; max-width:660px; height:auto; image-rendering:auto;
+    border-radius:4px; box-shadow:0 0 0 6px #05090b, 0 0 0 8px var(--line2), 0 10px 30px rgba(0,0,0,.5);}
+
+  .legend{display:flex; flex-wrap:wrap; gap:1.1rem; font-family:var(--mono); font-size:.74rem;
+    color:var(--muted); margin-top:1rem;}
+  .legend span{display:inline-flex; align-items:center; gap:.45rem;}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block;}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:14px;}
+  .cell{background:var(--panel); border:1px solid var(--line); border-radius:9px;
+    padding:12px 8px 10px; display:flex; flex-direction:column; align-items:center; gap:8px;}
+  .cell canvas{width:84px; height:84px; image-rendering:auto;}
+  .cell .cs{font-family:var(--mono); font-weight:700; font-size:.82rem; letter-spacing:.04em;}
+  .cell .nm{font-size:.72rem; color:var(--muted); text-align:center;}
+
+  .strip{display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; padding:16px;
+    background:var(--panel); border:1px solid var(--line); border-radius:9px;}
+  .strip .u{display:flex; flex-direction:column; align-items:center; gap:5px;}
+  .strip canvas{width:20px; height:20px; image-rendering:pixelated;}
+  .strip .t{font-family:var(--mono); font-size:.6rem; color:var(--muted);}
+  .note{font-size:.85rem; color:var(--muted); max-width:66ch;}
+  code{font-family:var(--mono); font-size:.85em; color:var(--accent);}
+</style>
+
+<div class="wrap"><main class="doc">
+
+  <header>
+    <p class="eyebrow">Cardputer-Adv · LoRa Suite</p>
+    <h1>Menu icons</h1>
+    <p class="lead">Hand-drawn vector glyphs — single-colour, recolourable, zero flash/RAM cost —
+      one per app, rendered into the launcher's icon-tile grid. This page runs the exact same
+      primitive calls (<code>fillTriangle</code>, <code>drawCircle</code>, …) the firmware issues to
+      LovyanGFX, at the same coordinates, so it's a faithful preview of the 240×135 screen.</p>
+  </header>
+
+  <section>
+    <h2>On the launcher</h2>
+    <p class="sub">Home screen, page 1 of the app grid (Courier selected). Arrow keys move; the
+      selection lifts the tile background so it reads on every category colour.</p>
+    <div class="device"><canvas id="screen" width="720" height="405"></canvas></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--accent)"></span>Comms</span>
+      <span><span class="sw" style="background:var(--loc)"></span>Location</span>
+      <span><span class="sw" style="background:var(--rf)"></span>RF tools</span>
+      <span><span class="sw" style="background:var(--muted)"></span>Utility</span>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>All 17 glyphs</h2>
+    <p class="sub">Shown in each app's category colour (the selected-tile look). Unselected tiles
+      draw the same glyph in muted grey.</p>
+    <div class="grid" id="gallery"></div>
+  </section>
+
+  <section>
+    <h2>Actual size</h2>
+    <p class="sub">Each glyph is a 20×20 box on the real display.</p>
+    <div class="strip" id="strip"></div>
+    <p class="note">Every glyph is pure code in each app's <code>drawIcon()</code> override — no
+      bitmaps, no asset pipeline, and it recolours for selection/theme for free. Swapping in
+      designed pictograms later is just a matter of <code>drawXBitmap()</code> against a flash array.</p>
+  </section>
+
+</main></div>
+
+<script>
+const C = {
+  bg:'#0a1013', panel:'#121a1f', line:'#213038', line2:'#31454f',
+  text:'#dde5ea', muted:'#8a99a3', accent:'#34d0bd', loc:'#5aa9e6', rf:'#f0a850',
+};
+const CAT = { comms:C.accent, location:C.loc, rf:C.rf, util:C.muted };
+
+// Minimal LovyanGFX-shaped shim over a 2D context at integer scale S.
+function Gfx(ctx, S){ this.x=ctx; this.S=S; }
+Gfx.prototype.col = function(c){ this.x.fillStyle=c; this.x.strokeStyle=c; };
+Gfx.prototype.fillRect = function(x,y,w,h,c){ this.col(c); this.x.fillRect(x*this.S,y*this.S,w*this.S,h*this.S); };
+Gfx.prototype.drawFastHLine = function(x,y,w,c){ this.fillRect(x,y,w,1,c); };
+Gfx.prototype.drawFastVLine = function(x,y,h,c){ this.fillRect(x,y,1,h,c); };
+Gfx.prototype.drawRect = function(x,y,w,h,c){ this.drawFastHLine(x,y,w,c); this.drawFastHLine(x,y+h-1,w,c); this.drawFastVLine(x,y,h,c); this.drawFastVLine(x+w-1,y,h,c); };
+Gfx.prototype.fillCircle = function(cx,cy,r,c){ const S=this.S; this.col(c); this.x.beginPath(); this.x.arc(cx*S+S/2, cy*S+S/2, r*S+S/2, 0, 7); this.x.fill(); };
+Gfx.prototype.drawCircle = function(cx,cy,r,c){ const S=this.S; this.col(c); this.x.lineWidth=S; this.x.beginPath(); this.x.arc(cx*S+S/2, cy*S+S/2, r*S, 0, 7); this.x.stroke(); };
+Gfx.prototype.fillTriangle = function(x0,y0,x1,y1,x2,y2,c){ const S=this.S; this.col(c); const X=this.x; X.beginPath(); X.moveTo(x0*S+S/2,y0*S+S/2); X.lineTo(x1*S+S/2,y1*S+S/2); X.lineTo(x2*S+S/2,y2*S+S/2); X.closePath(); X.fill(); };
+Gfx.prototype.drawTriangle = function(x0,y0,x1,y1,x2,y2,c){ const S=this.S; this.col(c); this.x.lineWidth=S; const X=this.x; X.beginPath(); X.moveTo(x0*S+S/2,y0*S+S/2); X.lineTo(x1*S+S/2,y1*S+S/2); X.lineTo(x2*S+S/2,y2*S+S/2); X.closePath(); X.stroke(); };
+Gfx.prototype.drawLine = function(x0,y0,x1,y1,c){ const S=this.S; this.col(c); this.x.lineWidth=S; this.x.lineCap='round'; const X=this.x; X.beginPath(); X.moveTo(x0*S+S/2,y0*S+S/2); X.lineTo(x1*S+S/2,y1*S+S/2); X.stroke(); };
+function rr(X,x,y,w,h,r){ r=Math.min(r,w/2,h/2); X.beginPath(); X.moveTo(x+r,y); X.arcTo(x+w,y,x+w,y+h,r); X.arcTo(x+w,y+h,x,y+h,r); X.arcTo(x,y+h,x,y,r); X.arcTo(x,y,x+w,y,r); X.closePath(); }
+Gfx.prototype.fillRoundRect = function(x,y,w,h,r,c){ const S=this.S; this.col(c); rr(this.x,x*S,y*S,w*S,h*S,r*S); this.x.fill(); };
+Gfx.prototype.drawRoundRect = function(x,y,w,h,r,c){ const S=this.S; this.col(c); this.x.lineWidth=S; rr(this.x,x*S+S/2,y*S+S/2,w*S-S,h*S-S,r*S); this.x.stroke(); };
+
+// The 17 glyphs — bodies transcribed verbatim from each app's drawIcon(g,x,y,c).
+const ICONS = [
+  {cs:'CR',  nm:'Courier',    cat:'comms',    d:(g,x,y,c)=>{ g.fillRoundRect(x+1,y+3,18,12,3,c); g.fillTriangle(x+4,y+14,x+4,y+19,x+10,y+14,c); }},
+  {cs:'CB',  nm:'Contacts',   cat:'util',     d:(g,x,y,c)=>{ g.fillCircle(x+10,y+6,4,c); g.fillRoundRect(x+3,y+12,14,8,3,c); }},
+  {cs:'RLY', nm:'Relay',      cat:'comms',    d:(g,x,y,c)=>{ const ax=x+3,ay=y+4,bx=x+16,by=y+5,dx=x+10,dy=y+16; g.drawLine(ax,ay,dx,dy,c); g.drawLine(bx,by,dx,dy,c); g.drawLine(ax,ay,bx,by,c); g.fillCircle(ax,ay,3,c); g.fillCircle(bx,by,3,c); g.fillCircle(dx,dy,3,c); }},
+  {cs:'BCN', nm:'Beacon',     cat:'location', d:(g,x,y,c)=>{ g.fillCircle(x+10,y+10,3,c); g.drawCircle(x+10,y+10,6,c); g.drawCircle(x+10,y+10,9,c); }},
+  {cs:'RDR', nm:'Radar',      cat:'location', d:(g,x,y,c)=>{ g.drawCircle(x+10,y+10,9,c); g.drawCircle(x+10,y+10,4,c); g.drawLine(x+10,y+10,x+17,y+4,c); g.fillCircle(x+15,y+6,1,c); }},
+  {cs:'PF',  nm:'Pathfinder', cat:'location', d:(g,x,y,c)=>{ g.fillCircle(x+10,y+7,6,c); g.fillTriangle(x+4,y+9,x+16,y+9,x+10,y+19,c); }},
+  {cs:'TRK', nm:'Breadcrumb', cat:'location', d:(g,x,y,c)=>{ g.fillCircle(x+4,y+16,2,c); g.fillCircle(x+8,y+11,2,c); g.fillCircle(x+12,y+8,2,c); g.fillCircle(x+16,y+4,2,c); }},
+  {cs:'SOS', nm:'Mayday',     cat:'util',     d:(g,x,y,c)=>{ g.drawTriangle(x+10,y+2,x+2,y+18,x+18,y+18,c); g.drawTriangle(x+10,y+4,x+4,y+17,x+16,y+17,c); g.fillRect(x+9,y+8,2,5,c); g.fillRect(x+9,y+15,2,2,c); }},
+  {cs:'SWP', nm:'Sweep',      cat:'rf',       d:(g,x,y,c)=>{ g.fillRect(x+2,y+12,3,6,c); g.fillRect(x+7,y+7,3,11,c); g.fillRect(x+12,y+3,3,15,c); g.fillRect(x+16,y+9,3,9,c); }},
+  {cs:'MON', nm:'Monitor',    cat:'rf',       d:(g,x,y,c)=>{ for(let r=0;r<3;r++){ const yy=y+4+r*5; g.fillRect(x+2,yy,3,3,c); g.drawFastHLine(x+7,yy+1,10,c);} }},
+  {cs:'RNG', nm:'Ranger',     cat:'rf',       d:(g,x,y,c)=>{ g.drawCircle(x+10,y+10,8,c); g.drawCircle(x+10,y+10,3,c); g.drawFastHLine(x+0,y+10,4,c); g.drawFastHLine(x+16,y+10,4,c); g.drawFastVLine(x+10,y+0,4,c); g.drawFastVLine(x+10,y+16,4,c); }},
+  {cs:'TIME',nm:'Chronos',    cat:'util',     d:(g,x,y,c)=>{ g.drawCircle(x+10,y+10,9,c); g.drawLine(x+10,y+10,x+10,y+4,c); g.drawLine(x+10,y+10,x+15,y+10,c); }},
+  {cs:'CFG', nm:'Console',    cat:'util',     d:(g,x,y,c)=>{ g.drawFastHLine(x+2,y+5,16,c); g.fillCircle(x+7,y+5,2,c); g.drawFastHLine(x+2,y+10,16,c); g.fillCircle(x+13,y+10,2,c); g.drawFastHLine(x+2,y+15,16,c); g.fillCircle(x+9,y+15,2,c); }},
+  {cs:'PWR', nm:'Reactor',    cat:'util',     d:(g,x,y,c)=>{ g.drawRoundRect(x+2,y+5,14,11,2,c); g.fillRect(x+16,y+8,2,5,c); g.fillTriangle(x+10,y+6,x+6,y+12,x+9,y+12,c); g.fillTriangle(x+8,y+15,x+12,y+9,x+9,y+9,c); }},
+  {cs:'ALRT',nm:'Klaxon',     cat:'util',     d:(g,x,y,c)=>{ g.fillTriangle(x+10,y+3,x+4,y+14,x+16,y+14,c); g.fillRoundRect(x+3,y+13,14,3,1,c); g.fillCircle(x+10,y+18,2,c); }},
+  {cs:'TLM', nm:'Telemetry',  cat:'util',     d:(g,x,y,c)=>{ g.drawLine(x+2,y+14,x+6,y+6,c); g.drawLine(x+6,y+6,x+10,y+15,c); g.drawLine(x+10,y+15,x+14,y+9,c); g.drawLine(x+14,y+9,x+18,y+12,c); }},
+  {cs:'DROP',nm:'Dropbox',    cat:'util',     d:(g,x,y,c)=>{ g.fillRect(x+9,y+2,2,8,c); g.fillTriangle(x+5,y+9,x+15,y+9,x+10,y+15,c); g.drawFastHLine(x+3,y+17,14,c); g.drawFastVLine(x+3,y+14,3,c); g.drawFastVLine(x+16,y+14,3,c); }},
+];
+
+// --- Gallery (big) ---
+const gal = document.getElementById('gallery');
+for (const it of ICONS){
+  const cell = document.createElement('div'); cell.className='cell';
+  const S=6, cv=document.createElement('canvas'); cv.width=22*S; cv.height=22*S;
+  const ctx=cv.getContext('2d'); ctx.fillStyle=C.panel; ctx.fillRect(0,0,cv.width,cv.height);
+  const g=new Gfx(ctx,S); it.d(g,1,1,CAT[it.cat]);
+  const cs=document.createElement('div'); cs.className='cs'; cs.textContent=it.cs; cs.style.color=CAT[it.cat];
+  const nm=document.createElement('div'); nm.className='nm'; nm.textContent=it.nm;
+  cell.append(cv,cs,nm); gal.append(cell);
+}
+
+// --- Actual-size strip ---
+const strip=document.getElementById('strip');
+for (const it of ICONS){
+  const u=document.createElement('div'); u.className='u';
+  const cv=document.createElement('canvas'); cv.width=20; cv.height=20;
+  const ctx=cv.getContext('2d'); const g=new Gfx(ctx,1); it.d(g,0,0,CAT[it.cat]);
+  const t=document.createElement('div'); t.className='t'; t.textContent=it.cs;
+  u.append(cv,t); strip.append(u);
+}
+
+// --- Launcher mock (240x135 device @ S=3) ---
+(function(){
+  const S=3, cv=document.getElementById('screen'); const ctx=cv.getContext('2d');
+  const g=new Gfx(ctx,S);
+  const HEADER_H=16, FOOTER_H=12, SW=240, SH=135, BODY_Y=HEADER_H+1;
+  const APPS=ICONS, COLS=4, cw=56, ch=30, gap=2, x0=4, y0=BODY_Y+1, rowH=ch+gap, visRows=3;
+  const sel=0;
+
+  g.fillRect(0,0,SW,SH,C.bg);
+
+  // header
+  g.fillRect(0,0,SW,HEADER_H,C.panel);
+  g.fillRect(0,0,3,HEADER_H,C.muted);
+  ctx.textBaseline='top'; ctx.font=`${5.5*S}px ${'ui-monospace,monospace'}`;
+  ctx.fillStyle=C.muted; ctx.fillText('HOME',8*S,4*S);
+  ctx.fillStyle=C.text;  ctx.fillText('LoRa Suite',40*S,4*S);
+  ctx.fillStyle=C.muted; ctx.textAlign='right'; ctx.fillText('--:--:--',(SW-4)*S,4*S); ctx.textAlign='left';
+  g.drawFastHLine(0,HEADER_H,SW,C.line);
+
+  // tiles (page 1 = first 12)
+  for (let i=0;i<APPS.length;i++){
+    const r=Math.floor(i/COLS), col=i%COLS;
+    if (r>=visRows) continue;
+    const x=x0+col*(cw+gap), y=y0+r*rowH;
+    const s=(i===sel); const cc=CAT[APPS[i].cat];
+    const bg=s?C.line:C.panel;
+    g.fillRect(x,y,cw,ch,bg);
+    g.drawRect(x,y,cw,ch,s?cc:C.line);
+    if(s) g.drawRect(x-1,y-1,cw+2,ch+2,cc);
+    APPS[i].d(g, x+((cw-20)>>1), y+2, s?cc:C.muted);
+    ctx.fillStyle=s?cc:C.muted; ctx.textAlign='center'; ctx.font=`${5.5*S}px ui-monospace,monospace`;
+    ctx.fillText(APPS[i].cs,(x+cw/2)*S,(y+22)*S); ctx.textAlign='left';
+  }
+  // scroll hint
+  ctx.fillStyle=C.muted; ctx.textAlign='right'; ctx.font=`${5*S}px ui-monospace,monospace`;
+  ctx.fillText('1/17',(SW-4)*S,(BODY_Y+2)*S); ctx.textAlign='left';
+
+  // footer
+  const fy=SH-FOOTER_H;
+  g.fillRect(0,fy,SW,FOOTER_H,C.panel); g.drawFastHLine(0,fy-1,SW,C.line);
+  g.drawRect(4,fy+3,38,6,C.line); g.fillRect(5,fy+4,10,4,C.accent);
+  ctx.fillStyle=C.accent; ctx.font=`${5*S}px ui-monospace,monospace`; ctx.fillText('0%',46*S,(fy+2)*S);
+  ctx.fillStyle=C.muted; ctx.fillText('ch00',76*S,(fy+2)*S);
+  ctx.textAlign='right'; ctx.fillText('87%',(SW-12)*S,(fy+2)*S); ctx.textAlign='left';
+  g.fillCircle(SW-5,fy+FOOTER_H/2,3,C.rf);
+})();
+</script>

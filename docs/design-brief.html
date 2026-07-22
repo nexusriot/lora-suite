@@ -1,0 +1,653 @@
+<title>Cardputer-Adv LoRa Suite — Design Brief</title>
+<style>
+  /* ============ Field-radio instrument identity ============ */
+  :root{
+    --bg:#e9edf1; --panel:#ffffff; --panel-2:#f4f7f9; --sunk:#eef2f5;
+    --text:#161d23; --muted:#5a6773; --faint:#8a97a2;
+    --line:#d5dce2; --line-2:#c1cbd3;
+    --accent:#0b7d72; --accent-ink:#075e56; --accent-soft:rgba(11,125,114,.10);
+    --loc:#2f6fb0; --loc-soft:rgba(47,111,176,.10);
+    --rf:#b45c14; --rf-soft:rgba(180,92,20,.10);
+    --util:#5a6773; --util-soft:rgba(90,103,115,.10);
+    --good:#1f9d55; --warn:#b9820b; --crit:#c93b52;
+    --shadow:0 1px 2px rgba(16,29,38,.06),0 6px 22px rgba(16,29,38,.06);
+    --mono:ui-monospace,"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0a0f12; --panel:#121a1f; --panel-2:#0f171b; --sunk:#0c1418;
+      --text:#dde5ea; --muted:#8a99a3; --faint:#61707a;
+      --line:#213039; --line-2:#31454f;
+      --accent:#34d0bd; --accent-ink:#7fe6da; --accent-soft:rgba(52,208,189,.13);
+      --loc:#5aa9e6; --loc-soft:rgba(90,169,230,.13);
+      --rf:#f0a850; --rf-soft:rgba(240,168,80,.13);
+      --util:#8a99a3; --util-soft:rgba(138,153,163,.13);
+      --good:#4ec37a; --warn:#e8b64a; --crit:#f0708a;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#e9edf1; --panel:#ffffff; --panel-2:#f4f7f9; --sunk:#eef2f5;
+    --text:#161d23; --muted:#5a6773; --faint:#8a97a2;
+    --line:#d5dce2; --line-2:#c1cbd3;
+    --accent:#0b7d72; --accent-ink:#075e56; --accent-soft:rgba(11,125,114,.10);
+    --loc:#2f6fb0; --loc-soft:rgba(47,111,176,.10);
+    --rf:#b45c14; --rf-soft:rgba(180,92,20,.10);
+    --util:#5a6773; --util-soft:rgba(90,103,115,.10);
+    --good:#1f9d55; --warn:#b9820b; --crit:#c93b52;
+    --shadow:0 1px 2px rgba(16,29,38,.06),0 6px 22px rgba(16,29,38,.06);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0a0f12; --panel:#121a1f; --panel-2:#0f171b; --sunk:#0c1418;
+    --text:#dde5ea; --muted:#8a99a3; --faint:#61707a;
+    --line:#213039; --line-2:#31454f;
+    --accent:#34d0bd; --accent-ink:#7fe6da; --accent-soft:rgba(52,208,189,.13);
+    --loc:#5aa9e6; --loc-soft:rgba(90,169,230,.13);
+    --rf:#f0a850; --rf-soft:rgba(240,168,80,.13);
+    --util:#8a99a3; --util-soft:rgba(138,153,163,.13);
+    --good:#4ec37a; --warn:#e8b64a; --crit:#f0708a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0}
+  .wrap{
+    font-family:var(--sans); color:var(--text); background:var(--bg);
+    line-height:1.62; -webkit-font-smoothing:antialiased;
+    font-size:16px;
+  }
+  .doc{max-width:1140px; margin:0 auto; padding:clamp(20px,4vw,52px) clamp(16px,4vw,40px);
+       display:flex; flex-direction:column; gap:clamp(40px,6vw,72px);}
+  a{color:var(--accent-ink)}
+
+  .eyebrow{font-family:var(--mono); font-size:.72rem; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--accent-ink); font-weight:600; margin:0 0 .5rem;}
+  h1,h2,h3{margin:0; text-wrap:balance; letter-spacing:-.015em; line-height:1.14;}
+  h1{font-size:clamp(2rem,5.2vw,3.1rem); font-weight:720;}
+  h2{font-size:clamp(1.4rem,3vw,1.85rem); font-weight:680;}
+  h3{font-size:1.02rem; font-weight:670; letter-spacing:-.005em;}
+  p{margin:0}
+  .lead{font-size:clamp(1.02rem,1.6vw,1.16rem); color:var(--muted); max-width:64ch;}
+  .prose{max-width:68ch; color:var(--muted);}
+  .prose strong{color:var(--text); font-weight:640;}
+  section{scroll-margin-top:24px}
+
+  .sec-head{display:flex; flex-direction:column; gap:.4rem; margin-bottom:1.6rem;}
+  .rule{height:1px; background:linear-gradient(90deg,var(--line-2),transparent); border:0; margin:0;}
+
+  /* ---------- hero ---------- */
+  .hero{display:flex; flex-direction:column; gap:1.5rem;}
+  .badges{display:flex; flex-wrap:wrap; gap:.5rem; font-family:var(--mono);}
+  .badge{font-size:.74rem; letter-spacing:.03em; padding:.32rem .6rem; border-radius:5px;
+    border:1px solid var(--line-2); color:var(--muted); background:var(--panel);
+    display:inline-flex; gap:.45rem; align-items:center;}
+  .badge b{color:var(--text); font-weight:600;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+
+  .scope{width:100%; height:74px; display:block; border:1px solid var(--line);
+    border-radius:8px; background:var(--panel-2);}
+  .scope-cap{font-family:var(--mono); font-size:.68rem; color:var(--faint);
+    letter-spacing:.06em; display:flex; justify-content:space-between; margin-top:.4rem;}
+
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px;
+    background:var(--line); border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .stat{background:var(--panel); padding:1rem 1.1rem;}
+  .stat .n{font-family:var(--mono); font-size:1.5rem; font-weight:600; color:var(--text); letter-spacing:-.02em;}
+  .stat .n small{color:var(--accent-ink); font-size:1rem;}
+  .stat .k{font-family:var(--mono); font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; color:var(--faint); margin-top:.2rem;}
+
+  /* ---------- panels / grids ---------- */
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:1.1rem;}
+  @media(max-width:720px){.grid-2{grid-template-columns:1fr}}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:9px;
+    box-shadow:var(--shadow); padding:1.15rem 1.2rem;}
+  .panel h3{margin-bottom:.7rem; display:flex; align-items:center; gap:.5rem;}
+  .tag{font-family:var(--mono); font-size:.64rem; letter-spacing:.08em; text-transform:uppercase;
+    padding:.16rem .42rem; border-radius:4px; border:1px solid var(--line-2); color:var(--muted);}
+
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:.3rem .9rem; font-size:.9rem;}
+  .kv dt{font-family:var(--mono); font-size:.76rem; color:var(--faint); letter-spacing:.04em;
+    text-transform:uppercase; padding-top:.14rem; white-space:nowrap;}
+  .kv dd{margin:0; color:var(--text);}
+
+  /* ---------- pinout table ---------- */
+  .tbl-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:9px; box-shadow:var(--shadow);}
+  table{border-collapse:collapse; width:100%; font-size:.86rem; background:var(--panel);}
+  th,td{text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--line);}
+  thead th{font-family:var(--mono); font-size:.66rem; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--faint); background:var(--panel-2); font-weight:600;}
+  tbody tr:last-child td{border-bottom:0}
+  td .pin{font-family:var(--mono); font-weight:600; color:var(--accent-ink); font-variant-numeric:tabular-nums;}
+  td .sig{font-family:var(--mono); color:var(--text);}
+  .muted-cell{color:var(--muted)}
+  .note-line{font-size:.85rem; color:var(--muted); margin-top:.7rem; display:flex; gap:.55rem; align-items:flex-start;}
+  .note-line .mk{font-family:var(--mono); color:var(--rf); font-weight:600; flex:none;}
+
+  /* ---------- architecture stack ---------- */
+  .stack{display:flex; flex-direction:column; gap:.5rem;}
+  .layer{border:1px solid var(--line); border-radius:8px; background:var(--panel);
+    padding:.75rem .95rem; display:grid; grid-template-columns:130px 1fr; gap:1rem; align-items:center;}
+  @media(max-width:600px){.layer{grid-template-columns:1fr; gap:.4rem}}
+  .layer .lname{font-family:var(--mono); font-size:.72rem; text-transform:uppercase;
+    letter-spacing:.09em; color:var(--accent-ink); font-weight:600;}
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem;}
+  .chip{font-family:var(--mono); font-size:.74rem; padding:.28rem .55rem; border-radius:5px;
+    background:var(--panel-2); border:1px solid var(--line-2); color:var(--text);}
+  .layer.hl{border-color:var(--accent); background:var(--accent-soft);}
+  .layer.hl .lname{color:var(--accent-ink);}
+
+  /* ---------- protocol frame ---------- */
+  .frame-wrap{overflow-x:auto; padding-bottom:.3rem;}
+  .frame{display:flex; gap:3px; min-width:640px;}
+  .field{flex:1 1 auto; border:1px solid var(--line-2); border-radius:6px; background:var(--panel);
+    padding:.55rem .4rem; text-align:center; min-width:52px;}
+  .field.pl{flex:2 2 auto; background:var(--accent-soft); border-color:var(--accent);}
+  .field.crc{background:var(--rf-soft); border-color:var(--rf);}
+  .field .fn{font-family:var(--mono); font-size:.72rem; font-weight:600; color:var(--text);}
+  .field .fb{font-family:var(--mono); font-size:.62rem; color:var(--faint); margin-top:.15rem;}
+  .flags{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.9rem; font-family:var(--mono); font-size:.75rem;}
+  .flag{padding:.24rem .5rem; border-radius:4px; border:1px solid var(--line-2); color:var(--muted);}
+
+  .types{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:.5rem; margin-top:1rem;}
+  .type{border:1px solid var(--line); border-radius:7px; padding:.55rem .7rem; background:var(--panel);}
+  .type .tn{font-family:var(--mono); font-weight:600; font-size:.82rem; color:var(--accent-ink);}
+  .type .td{font-size:.78rem; color:var(--muted); margin-top:.1rem;}
+
+  /* ---------- app catalog ---------- */
+  .legend{display:flex; flex-wrap:wrap; gap:1rem; font-family:var(--mono); font-size:.74rem;
+    color:var(--muted); margin-bottom:1.3rem;}
+  .legend span{display:inline-flex; align-items:center; gap:.45rem;}
+  .swatch{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .cat-comms{--c:var(--accent); --cs:var(--accent-soft);}
+  .cat-loc{--c:var(--loc); --cs:var(--loc-soft);}
+  .cat-rf{--c:var(--rf); --cs:var(--rf-soft);}
+  .cat-util{--c:var(--util); --cs:var(--util-soft);}
+
+  .apps{display:grid; grid-template-columns:repeat(auto-fill,minmax(268px,1fr)); gap:1rem;}
+  .app{position:relative; border:1px solid var(--line); border-left:3px solid var(--c,var(--line-2));
+    border-radius:9px; background:var(--panel); box-shadow:var(--shadow); padding:1rem 1.1rem 1.05rem;
+    display:flex; flex-direction:column; gap:.55rem;}
+  .app-top{display:flex; align-items:center; gap:.65rem;}
+  .callsign{font-family:var(--mono); font-weight:700; font-size:.72rem; letter-spacing:.05em;
+    color:var(--c); background:var(--cs); border:1px solid var(--c); border-radius:5px;
+    padding:.28rem .5rem; flex:none;}
+  .app h3{font-size:1.04rem;}
+  .app .fx{font-size:.885rem; color:var(--muted); flex:1;}
+  .app .row{display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; font-family:var(--mono); font-size:.7rem;}
+  .app .row .lbl{color:var(--faint); text-transform:uppercase; letter-spacing:.08em; margin-right:.1rem;}
+  .pkt{padding:.16rem .42rem; border-radius:4px; background:var(--panel-2); border:1px solid var(--line-2); color:var(--text);}
+  .stretch-tag{position:absolute; top:.7rem; right:.8rem; font-family:var(--mono); font-size:.6rem;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--warn); border:1px solid var(--warn);
+    border-radius:4px; padding:.1rem .32rem;}
+
+  /* ---------- duty cycle ---------- */
+  .duty{display:flex; flex-direction:column; gap:.9rem;}
+  .duty-bar{height:26px; border-radius:6px; background:var(--sunk); border:1px solid var(--line);
+    overflow:hidden; display:flex; position:relative;}
+  .duty-bar i{display:block; height:100%;}
+  .duty-lab{display:flex; justify-content:space-between; font-family:var(--mono); font-size:.72rem; color:var(--muted);}
+  .duty-lab b{color:var(--text); font-weight:600;}
+
+  /* ---------- code tree ---------- */
+  pre.tree{margin:0; overflow-x:auto; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:9px; padding:1.1rem 1.2rem; font-family:var(--mono); font-size:.8rem;
+    line-height:1.62; color:var(--text);}
+  pre.tree .c{color:var(--faint)}
+  pre.tree .a{color:var(--accent-ink)}
+
+  /* ---------- roadmap ---------- */
+  .phases{display:flex; flex-direction:column; gap:.55rem;}
+  .phase{display:grid; grid-template-columns:64px 1fr; gap:1rem; align-items:start;
+    border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:.8rem .95rem;}
+  .phase .pid{font-family:var(--mono); font-weight:700; color:var(--accent-ink); font-size:.9rem;}
+  .phase .pt{font-weight:640; font-size:.95rem; margin-bottom:.2rem;}
+  .phase .pd{font-size:.85rem; color:var(--muted);}
+
+  footer{color:var(--faint); font-size:.82rem; font-family:var(--mono); text-align:center;
+    border-top:1px solid var(--line); padding-top:1.4rem; letter-spacing:.02em;}
+  .callout{border:1px solid var(--accent); background:var(--accent-soft); border-radius:9px;
+    padding:1rem 1.15rem; font-size:.9rem; color:var(--text);}
+  .callout .h{font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent-ink); font-weight:600; margin-bottom:.35rem;}
+</style>
+
+<div class="wrap">
+<main class="doc">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Field-radio firmware · design brief</p>
+      <h1>A multi-function LoRa suite for the Cardputer-Adv</h1>
+    </div>
+    <p class="lead">Eleven pocket radio tools sharing one wire protocol, one duty-cycle governor,
+      and the Cap LoRa868's on-board GPS — from encrypted chat and mesh relay to a spectrum
+      sweep, range tester, and GPS radar, all keyboard-driven on the 240×135 screen.</p>
+
+    <div class="badges">
+      <span class="badge"><span class="dot"></span><b>SX1262</b> LoRa transceiver</span>
+      <span class="badge"><b>868–923 MHz</b> · +20 dBm</span>
+      <span class="badge"><b>GPS</b> ATGM336H on-module</span>
+      <span class="badge"><b>ESP32-S3</b> · 8 MB flash</span>
+      <span class="badge">RadioLib · TinyGPSPlus</span>
+    </div>
+
+    <div>
+      <canvas class="scope" id="scope" aria-hidden="true"></canvas>
+      <div class="scope-cap"><span>RSSI / channel activity — 868.0 → 869.6 MHz</span><span id="scopeNoise">noise floor −124 dBm</span></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="n">11<small>+1</small></div><div class="k">Apps in the set</div></div>
+      <div class="stat"><div class="n">1</div><div class="k">Shared frame protocol</div></div>
+      <div class="stat"><div class="n">9</div><div class="k">Message types</div></div>
+      <div class="stat"><div class="n">GPS</div><div class="k">Aware position + time</div></div>
+      <div class="stat"><div class="n">&lt;1%</div><div class="k">Duty-cycle governed</div></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ HARDWARE ============ -->
+  <section id="hw">
+    <div class="sec-head">
+      <p class="eyebrow">01 · Hardware it runs on</p>
+      <h2>Cardputer-Adv &times; Cap LoRa868</h2>
+      <p class="prose">The Cap clips onto the Adv's 14-pin EXT header (Cap-Bus). It carries an
+        <strong>SX1262</strong> LoRa radio on SPI <em>and</em> an <strong>ATGM336H GPS</strong>
+        on UART — so location and accurate UTC time are available to every app for free.</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>Cardputer-Adv <span class="tag">host · StampS3A</span></h3>
+        <dl class="kv">
+          <dt>MCU</dt><dd>ESP32-S3FN8 · dual-core 240 MHz · 8 MB flash</dd>
+          <dt>Display</dt><dd>1.14″ IPS 240×135 (ST7789)</dd>
+          <dt>Input</dt><dd>56-key mechanical keyboard</dd>
+          <dt>Audio</dt><dd>ES8311 codec · 1 W speaker · MEMS mic · 3.5 mm</dd>
+          <dt>Sensors</dt><dd>BMI270 6-axis IMU · IR transmitter</dd>
+          <dt>Storage</dt><dd>microSD slot · NVS (settings)</dd>
+          <dt>Power</dt><dd>1750 mAh Li-ion</dd>
+          <dt>Expansion</dt><dd>EXT 2.54 14-pin · Grove HY2.0-4P</dd>
+        </dl>
+      </div>
+
+      <div class="panel">
+        <h3>Cap LoRa868 <span class="tag">radio + GPS</span></h3>
+        <dl class="kv">
+          <dt>Radio</dt><dd>SX1262 (Stamp LoRa-1262)</dd>
+          <dt>Band</dt><dd>868–923 MHz · TX +20 dBm · RX −147 dBm</dd>
+          <dt>Modes</dt><dd>LoRa · (G)FSK · MSK · OOK · up to 300 kbps</dd>
+          <dt>GPS</dt><dd>ATGM336H (AT6668) · GPS/BDS/GLO/GAL/QZSS</dd>
+          <dt>Antenna</dt><dd>SMA rubber-duck 3 dBi + GPS ceramic</dd>
+          <dt>Bus</dt><dd>SPI (radio) · UART 115200 8N1 (GPS)</dd>
+          <dt>Stack</dt><dd>RadioLib + TinyGPSPlus (Arduino)</dd>
+          <dt>Link</dt><dd>Cap-Bus 14-pin → Adv EXT header</dd>
+        </dl>
+      </div>
+    </div>
+
+    <h3 style="margin:1.6rem 0 .8rem; font-family:var(--mono); font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint)">Pin map (as wired for the Adv)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Function</th><th>Signal</th><th>GPIO</th><th>Bus</th></tr></thead>
+        <tbody>
+          <tr><td>Radio chip-select</td><td class="sig">NSS / CS</td><td class="pin">G5</td><td class="muted-cell">SPI</td></tr>
+          <tr><td>Radio clock</td><td class="sig">SCK</td><td class="pin">G40</td><td class="muted-cell">SPI ⚠ shared w/ SD</td></tr>
+          <tr><td>Radio data out</td><td class="sig">MOSI</td><td class="pin">G14</td><td class="muted-cell">SPI ⚠ shared w/ SD</td></tr>
+          <tr><td>Radio data in</td><td class="sig">MISO</td><td class="pin">G39</td><td class="muted-cell">SPI ⚠ shared w/ SD</td></tr>
+          <tr><td>Radio busy</td><td class="sig">BUSY</td><td class="pin">G6</td><td class="muted-cell">GPIO</td></tr>
+          <tr><td>Radio IRQ</td><td class="sig">DIO1</td><td class="pin">G4</td><td class="muted-cell">interrupt</td></tr>
+          <tr><td>Radio reset</td><td class="sig">RST</td><td class="pin">G3</td><td class="muted-cell">GPIO</td></tr>
+          <tr><td>GPS → host</td><td class="sig">GPS-RX</td><td class="pin">G13</td><td class="muted-cell">UART1</td></tr>
+          <tr><td>GPS ← host</td><td class="sig">GPS-TX</td><td class="pin">G15</td><td class="muted-cell">UART1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note-line"><span class="mk">SPI</span><span><strong>The radio shares its SPI bus with the microSD slot</strong> (SCK G40 / MOSI G14 / MISO G39, separate chip-selects). Any app that logs to card — Breadcrumb, Monitor capture — must arbitrate bus access with the radio: guard transfers behind a single bus mutex and never hold both CS lines low at once.</span></p>
+    <p class="note-line"><span class="mk">GPS</span><span>GPS delivers position <em>and</em> disciplined UTC — the Adv has no RTC, so message timestamps, log filenames and the duty-cycle window all key off GPS time once a fix is acquired (falling back to millis() uptime before fix).</span></p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ ARCHITECTURE ============ -->
+  <section id="arch">
+    <div class="sec-head">
+      <p class="eyebrow">02 · How it's built</p>
+      <h2>One radio, many faces</h2>
+      <p class="prose">Apps are thin. Everything hard — the radio state machine, GPS parsing,
+        framing, crypto, mesh dedup, duty-cycle accounting — lives in shared services below
+        a launcher. Adding an app means writing a screen, not another driver.</p>
+    </div>
+
+    <div class="stack">
+      <div class="layer">
+        <div class="lname">Apps</div>
+        <div class="chips">
+          <span class="chip">Courier</span><span class="chip">Relay</span><span class="chip">Beacon</span>
+          <span class="chip">Radar</span><span class="chip">Breadcrumb</span><span class="chip">Sweep</span>
+          <span class="chip">Monitor</span><span class="chip">Ranger</span><span class="chip">Console</span>
+          <span class="chip">Klaxon</span><span class="chip">Telemetry</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lname">Shell</div>
+        <div class="chips">
+          <span class="chip">Launcher / grid</span><span class="chip">Screen manager</span>
+          <span class="chip">Keyboard router</span><span class="chip">Widgets (list · gauge · toast)</span>
+          <span class="chip">Theme</span>
+        </div>
+      </div>
+      <div class="layer hl">
+        <div class="lname">Services</div>
+        <div class="chips">
+          <span class="chip">LoRaService — RadioLib SX1262, IRQ-RX, TX queue, <b>duty governor</b></span>
+          <span class="chip">GpsService — TinyGPSPlus</span>
+          <span class="chip">Crypto — AES-CTR + channel hash</span>
+          <span class="chip">Storage — NVS profiles · SD logs</span>
+          <span class="chip">Clock — GPS-disciplined</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lname">Protocol</div>
+        <div class="chips">
+          <span class="chip">LoRaFrame codec</span><span class="chip">Addressing</span>
+          <span class="chip">Node table (last-heard · RSSI · distance)</span>
+          <span class="chip">Mesh dedup + forward</span><span class="chip">Airtime / link budget</span>
+        </div>
+      </div>
+      <div class="layer">
+        <div class="lname">HAL</div>
+        <div class="chips">
+          <span class="chip">pins.h</span><span class="chip">Shared SPI bus mutex</span>
+          <span class="chip">SD</span><span class="chip">UART1</span><span class="chip">M5Unified / M5GFX</span>
+        </div>
+      </div>
+    </div>
+    <p class="note-line" style="margin-top:1.1rem"><span class="mk">RX</span><span>Reception is interrupt-driven off <span class="sig" style="font-family:var(--mono)">DIO1</span>: the ISR just flags a ready packet, the main loop drains it, verifies CRC + channel, updates the node table, then hands it to the foreground app <em>and</em> the background Relay. So mesh forwarding keeps working no matter which app is open.</span></p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ PROTOCOL ============ -->
+  <section id="proto">
+    <div class="sec-head">
+      <p class="eyebrow">03 · The common language</p>
+      <h2>One frame every app speaks</h2>
+      <p class="prose">A fixed 13-byte header wraps every payload so any app can identify, route,
+        de-duplicate and acknowledge any packet — and the background mesh can forward types it
+        doesn't even understand.</p>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame">
+        <div class="field"><div class="fn">MAGIC</div><div class="fb">1 B</div></div>
+        <div class="field"><div class="fn">VER</div><div class="fb">1 B</div></div>
+        <div class="field"><div class="fn">TYPE</div><div class="fb">1 B</div></div>
+        <div class="field"><div class="fn">FLAGS</div><div class="fb">1 B</div></div>
+        <div class="field"><div class="fn">CHAN</div><div class="fb">1 B</div></div>
+        <div class="field"><div class="fn">SRC</div><div class="fb">2 B</div></div>
+        <div class="field"><div class="fn">DST</div><div class="fb">2 B</div></div>
+        <div class="field"><div class="fn">MSG-ID</div><div class="fb">2 B</div></div>
+        <div class="field"><div class="fn">HOP</div><div class="fb">1 B</div></div>
+        <div class="field"><div class="fn">LEN</div><div class="fb">1 B</div></div>
+        <div class="field pl"><div class="fn">PAYLOAD</div><div class="fb">0–200 B · opt. AES-CTR</div></div>
+        <div class="field crc"><div class="fn">CRC-16</div><div class="fb">2 B</div></div>
+      </div>
+    </div>
+    <div class="flags">
+      <span class="flag" style="color:var(--text)">FLAGS bits →</span>
+      <span class="flag">ACK_REQ</span><span class="flag">ENCRYPTED</span><span class="flag">MESH</span>
+      <span class="flag">FRAGMENT</span><span class="flag">·  ·  · reserved</span>
+    </div>
+
+    <div class="types">
+      <div class="type"><div class="tn">TEXT</div><div class="td">Chat message body</div></div>
+      <div class="type"><div class="tn">ACK</div><div class="td">Delivery confirm for MSG-ID</div></div>
+      <div class="type"><div class="tn">BEACON</div><div class="td">lat/lon/alt/speed/course</div></div>
+      <div class="type"><div class="tn">PING</div><div class="td">Range-test probe + seq</div></div>
+      <div class="type"><div class="tn">PONG</div><div class="td">Echo w/ measured RSSI/SNR</div></div>
+      <div class="type"><div class="tn">TELEMETRY</div><div class="td">IMU · battery · sensors</div></div>
+      <div class="type"><div class="tn">ALERT</div><div class="td">Pager code / canned alert</div></div>
+      <div class="type"><div class="tn">NODEINFO</div><div class="td">Callsign · caps · advert</div></div>
+      <div class="type"><div class="tn">FILECHUNK</div><div class="td">Sequenced transfer part</div></div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ APP CATALOG ============ -->
+  <section id="apps">
+    <div class="sec-head">
+      <p class="eyebrow">04 · The app set</p>
+      <h2>Eleven tools, four jobs</h2>
+    </div>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--accent)"></span>Comms</span>
+      <span><span class="swatch" style="background:var(--loc)"></span>Location · GPS</span>
+      <span><span class="swatch" style="background:var(--rf)"></span>RF tools</span>
+      <span><span class="swatch" style="background:var(--util)"></span>Utility</span>
+    </div>
+
+    <div class="apps">
+      <!-- COMMS -->
+      <article class="app cat-comms">
+        <div class="app-top"><span class="callsign">CR</span><h3>Courier</h3></div>
+        <p class="fx">Addressed &amp; broadcast text chat with scrollback, delivery ACKs, and optional PSK-encrypted channels.</p>
+        <div class="row"><span class="lbl">keys</span> type · Enter send · ← recipient · Tab channel</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">TEXT</span><span class="pkt">ACK</span></div>
+      </article>
+
+      <article class="app cat-comms">
+        <div class="app-top"><span class="callsign">RLY</span><h3>Relay</h3></div>
+        <p class="fx">Background flood-mesh: rebroadcasts frames with hop-limit + dedup so messages reach past direct range. Live node table.</p>
+        <div class="row"><span class="lbl">keys</span> toggle · set max-hops · view nodes</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">all</span><span class="pkt">NODEINFO</span></div>
+      </article>
+
+      <!-- LOCATION -->
+      <article class="app cat-loc">
+        <div class="app-top"><span class="callsign">BCN</span><h3>Beacon</h3></div>
+        <p class="fx">Transmits your GPS position on a timer, auto-throttled to the duty-cycle budget. Shows fix, sats, HDOP.</p>
+        <div class="row"><span class="lbl">keys</span> interval ± · burst now · on/off</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">BEACON</span></div>
+      </article>
+
+      <article class="app cat-loc">
+        <div class="app-top"><span class="callsign">RDR</span><h3>Radar</h3></div>
+        <p class="fx">Polar plot of every heard node by bearing + distance from your fix, with RSSI rings and last-heard fade.</p>
+        <div class="row"><span class="lbl">keys</span> zoom range · select node · lock north</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">BEACON ⇊</span></div>
+      </article>
+
+      <article class="app cat-loc">
+        <div class="app-top"><span class="callsign">TRK</span><h3>Breadcrumb</h3></div>
+        <p class="fx">Logs your track and every heard node to microSD as GPX/CSV, GPS-timestamped — a field recorder for the whole net.</p>
+        <div class="row"><span class="lbl">keys</span> start/stop · marker · new file</div>
+        <div class="row"><span class="lbl">out</span><span class="pkt">SD · .gpx / .csv</span></div>
+      </article>
+
+      <!-- RF TOOLS -->
+      <article class="app cat-rf">
+        <div class="app-top"><span class="callsign">SWP</span><h3>Sweep</h3></div>
+        <p class="fx">Walks a channel plan sampling RSSI + Channel-Activity-Detection — waterfall bars, live noise floor, busy/clear per channel.</p>
+        <div class="row"><span class="lbl">keys</span> set plan · dwell ± · hold peak</div>
+        <div class="row"><span class="lbl">uses</span><span class="pkt">RSSI · CAD</span></div>
+      </article>
+
+      <article class="app cat-rf">
+        <div class="app-top"><span class="callsign">MON</span><h3>Monitor</h3></div>
+        <p class="fx">Promiscuous receive on any config: hex + decoded frames with RSSI/SNR/airtime, and optional capture to SD.</p>
+        <div class="row"><span class="lbl">keys</span> freeze · decode/raw · capture</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">any ⇊</span></div>
+      </article>
+
+      <article class="app cat-rf">
+        <div class="app-top"><span class="callsign">RNG</span><h3>Ranger</h3></div>
+        <p class="fx">Ping/echo link test: RSSI, SNR, round-trip, packet-loss %, and true distance when both ends have a GPS fix.</p>
+        <div class="row"><span class="lbl">keys</span> initiator/responder · rate · reset</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">PING</span><span class="pkt">PONG</span></div>
+      </article>
+
+      <!-- UTILITY -->
+      <article class="app cat-util">
+        <div class="app-top"><span class="callsign">CFG</span><h3>Console</h3></div>
+        <p class="fx">Radio profiles — freq, SF, BW, CR, power, preamble, sync-word, PSK. Named NVS presets + live airtime / duty / link-budget math.</p>
+        <div class="row"><span class="lbl">keys</span> edit field · save/load preset · region</div>
+        <div class="row"><span class="lbl">out</span><span class="pkt">NVS presets</span></div>
+      </article>
+
+      <article class="app cat-util">
+        <div class="app-top"><span class="callsign">ALRT</span><h3>Klaxon</h3></div>
+        <p class="fx">Canned alerts &amp; numeric pages. An incoming alert flashes the screen and drives the 1 W speaker — a LoRa pager.</p>
+        <div class="row"><span class="lbl">keys</span> pick code · send · mute/ack</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">ALERT</span></div>
+      </article>
+
+      <article class="app cat-util">
+        <div class="app-top"><span class="callsign">TLM</span><h3>Telemetry</h3></div>
+        <p class="fx">Streams BMI270 motion + battery as telemetry; a paired unit renders live gauges. The template for any sensor feed.</p>
+        <div class="row"><span class="lbl">keys</span> send/receive · rate · pick fields</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">TELEMETRY</span></div>
+      </article>
+
+      <article class="app cat-util">
+        <span class="stretch-tag">stretch</span>
+        <div class="app-top"><span class="callsign">DROP</span><h3>Dropbox</h3></div>
+        <p class="fx">Chunked file/note transfer with sequencing, per-chunk ACK and reassembly to SD — slow, but proves the link end-to-end.</p>
+        <div class="row"><span class="lbl">keys</span> pick file · send · accept</div>
+        <div class="row"><span class="lbl">pkt</span><span class="pkt">FILECHUNK</span></div>
+      </article>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ DUTY CYCLE ============ -->
+  <section id="duty">
+    <div class="sec-head">
+      <p class="eyebrow">05 · The rule everything obeys</p>
+      <h2>Duty-cycle governor</h2>
+      <p class="prose">868 MHz is a shared, regulated band — most EU sub-bands cap transmit airtime
+        at <strong>1%</strong> (some 0.1%). A single governor in <em>LoRaService</em> meters every
+        transmission's time-on-air against a rolling window and throttles or queues the app when
+        the budget runs low. Beacon intervals, mesh rebroadcast and file transfer all defer to it.</p>
+    </div>
+    <div class="panel duty">
+      <div class="duty-lab"><span>Rolling airtime — last 3600 s window</span><span><b>612 ms</b> / 36 000 ms budget</span></div>
+      <div class="duty-bar" role="img" aria-label="1.7 percent of duty-cycle budget used">
+        <i style="width:1.7%; background:var(--good)"></i>
+      </div>
+      <div class="duty-lab">
+        <span><b style="color:var(--good)">1.7%</b> used · sending clear</span>
+        <span>SF9 · BW125 · 40-byte frame ≈ <b>144 ms</b> on air</span>
+      </div>
+      <div style="border-top:1px solid var(--line); margin-top:.3rem; padding-top:.7rem; display:flex; flex-wrap:wrap; gap:.5rem;">
+        <span class="chip">Region: EU868 · US915 · AS923</span>
+        <span class="chip">Time-on-air preview in Console</span>
+        <span class="chip">Governor blocks non-urgent TX at budget</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ PROJECT + ROADMAP ============ -->
+  <section id="build">
+    <div class="sec-head">
+      <p class="eyebrow">06 · Shipping it</p>
+      <h2>Project layout &amp; build order</h2>
+      <p class="prose">One PlatformIO project (Arduino framework, ESP32-S3). The protocol, airtime
+        and crypto code is pure C++ with <strong>native unit tests</strong> — testable on the host
+        with no hardware, per the always-test rule.</p>
+    </div>
+
+    <div class="grid-2" style="align-items:start">
+      <pre class="tree"><span class="c"># PlatformIO · arduino · esp32-s3</span>
+lora-suite/
+  platformio.ini
+  src/
+    main.cpp
+    <span class="a">shell/</span>      launcher · screen mgr · keymap
+    <span class="a">apps/</span>       courier · relay · beacon · radar
+                breadcrumb · sweep · monitor
+                ranger · console · klaxon · telemetry
+    <span class="a">services/</span>   lora · gps · crypto · storage · clock
+    <span class="a">proto/</span>      frame · node_table · airtime
+    <span class="a">ui/</span>         widgets · theme
+    <span class="a">hal/</span>        pins.h · spi_bus · sd
+  <span class="a">test/</span>        <span class="c"># pio test -e native</span>
+    test_frame · test_airtime
+    test_crypto · test_dedup
+  lib/</pre>
+
+      <div class="phases">
+        <div class="phase"><div class="pid">P0</div><div><div class="pt">Foundation</div><div class="pd">pins/HAL, LoRaService (RadioLib + IRQ-RX + TX queue + duty governor), GpsService, frame codec, launcher, <b>Console</b>. Native tests for frame/airtime/CRC.</div></div></div>
+        <div class="phase"><div class="pid">P1</div><div><div class="pt">Talk</div><div class="pd">Courier + Ranger — proves addressed messaging, ACKs, and link measurement end-to-end.</div></div></div>
+        <div class="phase"><div class="pid">P2</div><div><div class="pt">Locate</div><div class="pd">Beacon + Radar + Breadcrumb — GPS position, relative radar, SD logging with bus arbitration.</div></div></div>
+        <div class="phase"><div class="pid">P3</div><div><div class="pt">Listen</div><div class="pd">Sweep + Monitor + Relay — RSSI/CAD scanning, promiscuous capture, background mesh forwarding.</div></div></div>
+        <div class="phase"><div class="pid">P4</div><div><div class="pt">Signal</div><div class="pd">Klaxon + Telemetry + Dropbox — speaker/pager, sensor streaming, chunked transfer.</div></div></div>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:1.4rem">
+      <div class="h">Design decisions worth confirming</div>
+      Region default (EU868 vs US915) · encryption on by default or opt-in · M5Cardputer library vs raw M5Unified + M5GFX · whether Relay runs always-on in the background of every app or only when opened.
+    </div>
+  </section>
+
+  <footer>Cardputer-Adv · Cap LoRa868 · SX1262 — design brief · 2026-07-20</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  var cv = document.getElementById('scope');
+  if(!cv) return;
+  var ctx = cv.getContext('2d');
+  var reduce = window.matchMedia('(prefers-color-scheme: reduce)').matches
+            || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var N = 72, seed = 7, bars = [];
+  function rnd(){ seed = (seed*1103515245 + 12345) & 0x7fffffff; return seed/0x7fffffff; }
+  for(var i=0;i<N;i++) bars.push(0.15+0.12*rnd());
+  // a couple of persistent "signal" peaks
+  var peaks = [Math.floor(N*0.34), Math.floor(N*0.68)];
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  var t=0;
+  function resize(){
+    var r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio||1,2);
+    cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0);
+    return r;
+  }
+  function frame(){
+    var r = cv.getBoundingClientRect();
+    if(cv.width===0) resize();
+    var W=r.width, H=r.height, pad=6, bw=(W-pad*2)/N;
+    ctx.clearRect(0,0,W,H);
+    var accent=css('--accent'), rf=css('--rf'), line=css('--line-2'), faint=css('--faint');
+    // baseline grid
+    ctx.strokeStyle=line; ctx.globalAlpha=.5; ctx.lineWidth=1;
+    for(var g=1;g<4;g++){ var y=pad+(H-pad*2)*g/4; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke(); }
+    ctx.globalAlpha=1;
+    for(var i=0;i<N;i++){
+      var target=0.12+0.10*rnd();
+      var isPeak = peaks.indexOf(i)>=0 || peaks.indexOf(i-1)>=0 || peaks.indexOf(i+1)>=0;
+      if(isPeak) target += 0.45 + 0.18*Math.sin(t*0.05 + i);
+      bars[i] += (target-bars[i])*(reduce?1:0.12);
+      var h = Math.max(2,(H-pad*2)*Math.min(bars[i],0.95));
+      var x = pad + i*bw;
+      ctx.fillStyle = isPeak ? rf : accent;
+      ctx.globalAlpha = isPeak ? 0.92 : 0.55;
+      ctx.fillRect(x, H-pad-h, Math.max(1,bw-1.5), h);
+    }
+    ctx.globalAlpha=1;
+    t++;
+    if(!reduce) requestAnimationFrame(frame);
+  }
+  resize(); frame();
+  window.addEventListener('resize', function(){ resize(); if(reduce) frame(); });
+})();
+</script>

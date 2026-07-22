@@ -1,0 +1,30 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+lib_deps/
+
+# Build artifacts
+*.o
+*.a
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+build/
+
+# Native host tests (test/native/run.sh builds to $TMPDIR by default)
+lora-suite-tests
+*.out
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
