@@ -1,9 +1,10 @@
 # LoRa Suite — Design
 
-A multi-app LoRa toolkit for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
-(SX1262 radio + ATGM336H GPS). This document is the maintainable companion to the
-rendered [design brief](docs/design-brief.html); see [ROADMAP.md](ROADMAP.md) for
-the feature backlog and [README.md](README.md) for the user-facing overview.
+A multi-app LoRa toolkit (23 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
+(SX1262 radio + ATGM336H GPS), at `/home/vlad/workspace/my/lora-suite`. This document
+is the maintainable companion to the rendered [design brief](docs/design-brief.html);
+see [ROADMAP.md](ROADMAP.md) for the feature backlog and [README.md](README.md) for
+the user-facing overview.
 
 ## Principles
 

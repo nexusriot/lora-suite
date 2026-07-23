@@ -1,8 +1,10 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). Twelve keyboard-driven
-apps share one wire protocol, one duty-cycle governor, and the module's GPS.
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **23** keyboard-driven
+apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
+
+**Location:** `/home/vlad/workspace/my/lora-suite`
 
 **Docs:**
 - [`DESIGN.md`](DESIGN.md) — architecture, layers, wire protocol, and subsystems
@@ -102,7 +104,7 @@ src/
   services/  lora · gps · storage · clock                                  (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      12 apps                                                       (device)
+  apps/      23 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/ host unit tests (g++)

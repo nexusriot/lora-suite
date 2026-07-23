@@ -298,3 +298,129 @@ high-value, each exercises a different new subsystem (Pulse, the node grid, SD
 persistence, the Marshal queue, the Chronos clock, background scheduling).
 
 *(Full round-2 data: `tasks/wu6e6rkh9.output` — 52 ranked, 8 themes, 14 verdicts.)*
+
+---
+
+# Round 3 — under-explored frontiers
+
+After two rounds mined the obvious space (115 candidates + ~24 built), a third pass
+ran with **all 115 names as an exclusion set** and fresh lenses aimed at territory
+the first two never entered. 67 ideas → 64 deduped → **63 new** across 8 themes →
+top 12 feasibility-checked (`✓`). Scores are **value / feasibility / novelty** (1–5).
+
+The two richest new frontiers: the **unused Grove I2C port** (a whole
+external-sensor/power/actuator domain — every prior idea used only *built-in*
+peripherals) and **host-side dev/test tooling** (simulator, fuzzer, golden
+vectors — a natural fit for this project's strong host-test culture).
+
+## Reality checks from the round-3 audit
+- **The EXT / Cap-Bus header is occupied by the LoRa Cap** — external-hardware features must use the **Grove HY2.0 I2C port only** (which is genuinely free *and* off the shared radio+SD SPI bus). Drop every "EXT ADC/GPIO" framing.
+- **There is no I2C code in the repo yet** — a small Wire/I2C HAL bring-up is the shared prerequisite for the whole hardware theme; **Probe** is that tool.
+- **`airtime::pathLossDb` is free-space only** — RSSI multilateration (Pinpoint) yields a coarse region + error ellipse, not a tight pin; needs ≥3 well-separated GPS observers and the emitter's TX power is unknown.
+- **Compression must run before ChaCha20** (ciphertext is incompressible) and needs **capability gating** — an old RX decoding a new compressed *broadcast* renders garbage; drop per-node roster tokens (non-deterministic across nodes).
+- **Remote actuation (Contactor) is unsafe until Keyweave** — the shared-PSK MAC is group-auth only; the local/Reflex/deadman paths are safe regardless.
+- **Loadout overlaps round-2 Checkpoint** and needs a new `Storage::writeFile` + a per-loadout rules/roster persistence refactor — build one config-container both sit on. **Phaseline ≈ round-1 QSY++** — ship as QSY's replacement, not alongside.
+- Several ENVSENSE/NODEINFO ideas need **structured, length-prefixed** payloads (the Telemetry TLV is fixed; NODEINFO is a bare string) — new codecs, not drop-in reuse.
+
+## Top picks (all verified)
+- **Sensorium** ✓ — High · M · 5/4/5 — pluggable Grove-I2C **external-sensor framework** (BME280/SHT4x/SCD4x/lux…) feeding beacon/Reflex/Archive/Ledger via a self-describing ENVSENSE TLV. *Anchor of the hardware theme; Grove-only, ENVSENSE is new code.*
+- **Canon** ✓ — Quick · S · 5/5/3 — **golden-vector wire-conformance** tests: freeze canonical hex per MsgType, assert byte-for-byte, guard `PROTO_VERSION`. *Closes the real gap (round-trip tests miss silent layout changes).*
+- **Squeeze** ✓ — High · M · 5/4/4 — static-dictionary + Huffman **text codec** (~halves TEXT bytes) behind `FLAG_COMPRESSED`. *Attacks the 1% duty constraint; compress-before-encrypt; capability-gate it.*
+- **Probe** ✓ — Quick · S · 4/5/4 — **I2C scanner + register console** for the Grove port — the bring-up tool every hardware feature needs. *Read-only first.*
+- **Deluge** ✓ — Ambitious · L · 4/3/5 — feed-forward **erasure-coded bulk transfer** that self-heals whole-frame loss with zero feedback. *Answers Stream/ARQ's stop-and-wait problem; multi-frame only.*
+- **Coulomb** ✓ — High · M · 4/4/4 — Grove **INA219/226 energy monitor** → real watt-hours/coulomb-count into Reactor + Pulse. *External module; meter external-load/solar.*
+- **Pinpoint** ✓ — Ambitious · L · 5/3/5 — locate a silent emitter by **fusing multi-node RSSI sightings** (network multilateration, no movement). *Coarse; show a confidence ellipse.*
+- **Contactor** ✓ — High · M · 4/3/5 — confirmable **external output** (relay/servo/GPIO) with a **deadman failsafe**. *Confirm a Grove relay; remote path gated on Keyweave.*
+- **Loadout** ✓ — Ambitious · L · 5/4/4 — one-key atomic **mission profile** (radio+channel+rules+roster+power). *Needs `writeFile` + a shared config-container with Checkpoint.*
+- **Manifold** ✓ — High · M · 4/3/5 — mesh **capability directory** (which nearby node can sense CO₂ or open a gate) via a NODEINFO CAPS TLV.
+- **Prism** ✓ — Quick · S · 4/5/3 — **Wireshark Lua dissector** for the 13-byte format. *Off-device; live capture depends on Tether.*
+- **Phaseline** ✓△ — High · M · 4/4/5 — timed multi-phase squad reconfig in lockstep off Chronos UTC. *Ship as round-1 QSY's replacement.*
+
+## Catalog by theme (all 63)
+
+### External hardware I/O (Grove I2C — the EXT header is taken by the Cap)
+- **Sensorium** ✓ · Hi · M · 5/4/5 — external-sensor driver framework → ENVSENSE TLV.
+- **Probe** ✓ · Qw · S · 4/5/4 — I2C scanner + register console (bring-up tool).
+- **Coulomb** ✓ · Hi · M · 4/4/4 — INA219/226 energy/coulomb monitor → Reactor/Pulse.
+- **Contactor** ✓ · Hi · M · 4/3/5 — confirmable relay/servo output + deadman failsafe.
+- **Manifold** ✓ · Hi · M · 4/3/5 — hot-plug module detect + mesh capability directory.
+- **Placard** · Hi · M · 4/4/4 — drive a Grove e-ink/OLED as an always-on standing readout.
+- **Gauge** · Hi · M · 3/3/3 — analog/dry-contact/pulse reader (voltage, anemometer, Geiger).
+- **Conduit** · Am · L · 3/3/4 — remote I2C register tunnel: reconfigure a distant node's sensor over LoRa.
+
+### Wire efficiency & codecs (attack the 1% duty constraint)
+- **Squeeze** ✓ · Hi · M · 5/4/4 — dictionary+Huffman text compression (FLAG_COMPRESSED).
+- **Deluge** ✓ · Am · L · 4/3/5 — erasure-coded (RS/fountain) zero-feedback bulk transfer.
+- **Dispatch Forms** · Hi · M · 4/3/4 — fielded reports (SITREP/SALUTE/9-line) as template-id + bit-packed slots.
+- **Driftpack** · Hi · M · 4/4/4 — delta-encoded beacons (send only changed fields).
+- **Bundle** · Hi · M · 4/4/3 — coalesce small queued frames into one super-frame.
+- **Echoburst** · Qw · S · 3/5/3 — temporal-diversity N-tap for one-shot critical frames.
+- **Tallyman** · Qw · S · 3/4/3 — pre-send airtime/duty/compression-gain preview picking the cheapest encoding.
+- **Concord** · Hi · M · 3/4/3 — per-link codec + dictionary/schema-version handshake.
+
+### Host-side test, simulation & analysis tooling (unmined; fits the host-test culture)
+- **Canon** ✓ · Qw · S · 5/5/3 — golden-vector wire-conformance suite guarding PROTO_VERSION.
+- **Prism** ✓ · Qw · S · 4/5/3 — Wireshark/tshark Lua dissector for the wire format.
+- **Loom** · Am · L · 5/3/4 — host multi-node mesh simulator over a physics-modeled ether using the real `proto/` code.
+- **Gremlin** · Hi · M · 5/4/3 — structure-aware fuzzer for decode()/health-TLV/codecs/decrypt.
+- **Warp** · Hi · M · 4/4/3 — virtual-clock harness (replaces millis/Chronos) for deterministic, soak-years-in-seconds tests.
+- **Comply** · Hi · M · 4/3/4 — EU868 duty-cycle conformance checker over a sim/capture (proves <1% per sub-band).
+- **Rerun** · Hi · M · 3/3/3 — portable field-capture format + host replay through the real RX pipeline.
+- **Prospect** · Hi · M · 3/4/3 — message-path coverage reporter (which MsgType×Flags×branch the tests hit).
+
+### Network inference & situational analytics
+- **Pinpoint** ✓ · Am · L · 5/3/5 — multi-node RSSI multilateration of a silent emitter.
+- **Blindspot** · Am · L · 5/3/4 — detect one-way links / hidden nodes / single-relay choke points from heard-lists.
+- **Foretrack** · Hi · M · 4/4/4 — extrapolate peer tracks between sparse beacons + rendezvous ETA + off-course inference.
+- **Canary** · Hi · M · 4/3/4 — statistical-baseline watchdog classifying silent vs faded vs storming nodes.
+- **Cohort** · Hi · M · 4/3/4 — infer which nodes travel together / who was last near a missing member.
+- **Dossier** · Hi · M · 3/3/3 — on an alert, auto-assemble a cross-node incident timeline.
+- **Pilot** · Hi · M · 3/3/3 — predict link failure from RSSI trend + nominate the best relay early.
+- **Isobar** · Am · L · 3/3/4 — interpolate an environmental field across nodes + flag the outlier.
+
+### Mission posture, profiles & lifecycle
+- **Loadout** ✓ · Am · L · 5/4/4 — atomic named mission profile (radio+channel+rules+roster+power).
+- **Phaseline** ✓△ · Hi · M · 4/4/5 — timed multi-phase squad reconfig (≈ QSY++).
+- **Posture** · Hi · M · 4/4/4 — one-key stance toggle (go-dark / go-loud / stealth / emergency).
+- **Preflight** · Qw · S · 4/5/3 — go/no-go gate (GPS/time/SD/battery/key/antenna/peers) before a Loadout arms.
+- **Rehearse** · Hi · M · 4/4/4 — run full mission logic with TX suppressed + looped back, logging what *would* send.
+- **Debrief** · Hi · M · 4/4/3 — Start/End Mission markers scoping logs into one after-action bundle.
+- **PACE** · Am · L · 4/3/4 — ordered ladder of Loadouts that auto-escalates channels when the link goes silent.
+- **Billet** · Hi · M · 3/3/3 — advertise a node role (scout/relay/basecamp/listener) driving role-aware relay.
+
+### Field data collection & survey
+- **Docket** · Am · L · 4/3/4 — on-device form/survey schema builder + entry runner → schema-matched CSV.
+- **Sighting** · Hi · M · 4/4/4 — one-key geotagged observations with an azimuth-distance offset fix.
+- **Roundup** · Hi · M · 4/3/4 — collate typed records from many collectors → master dataset + coverage map + gap re-requests.
+- **Census** · Qw · S · 3/5/3 — multi-category tally counter on the keyboard, GPS/time-stamped, with LoRa roll-up.
+- **Transect** · Hi · M · 3/3/4 — auto-drop numbered survey stations every X metres and prompt a count.
+- **Regimen** · Hi · M · 3/3/4 — timed/geofenced sampling campaigns with done/missed compliance scoring.
+- **Bander** · Hi · M · 3/3/4 — mark-recapture: mint a checksummed tag code, re-enter later to append to the same specimen.
+
+### Trust, crypto & authorization (new niches)
+- **Keyshard** · Hi · M · 4/3/5 — Shamir k-of-n split of the channel PSK across squad nodes.
+- **Cascade** · Am · L · 4/3/5 — TESLA delayed-key-disclosure broadcast auth for beacons (no per-receiver keys).
+- **Sealchain** · Hi · M · 3/3/4 — tamper-evident hash-chain over the SD logs (Archive/Ledger).
+- **Notary** · Hi · M · 3/3/3 — GPS-UTC signed proof-of-existence receipts.
+- **Mirage** · Hi · M · 2/3/4 — deniable/repudiable authentication.
+- **Vouch** · Am · M · 3/2/4 — web-of-trust endorsement graph over the Roster (Sybil resistance).
+- **Quorum** · Am · L · 3/2/4 — M-of-N co-signed gate for destructive commands (wipe/key-rotate/channel).
+- **Warrant** · Am · L · 3/2/4 — delegated, expiring, revocable capability tokens.
+- **Lots** · Am · M · 2/2/4 — commit-reveal collective randomness for fair group decisions.
+
+### Imaging & remote display
+- **Pictogram** · Hi · M · 4/4/4 — 256-icon field-ops language, one byte per glanceable symbol.
+- **Mosaic** · Am · L · 3/3/4 — progressive interlaced 1-bit image transfer (coarse preview, then sharpen).
+- **Periscope** · Hi · M · 3/3/3 — push a screen snapshot, then stream only changed tiles.
+- **Peek** · Hi · M · 3/3/3 — browse a remote node's images as a thumbnail contact sheet, pull full-res on demand.
+- **Overlay** · Am · M · 3/2/3 — draw arrows/circles/stamps on your map; appear at true coords on everyone's.
+- **Scanline** · Am · L · 3/2/5 — bridge to analog SSTV via the mic (decode/encode image tones).
+- **Cartload** · Am · L · 2/2/3 — a map-less node pulls a low-res basemap tile from a neighbor.
+
+## Suggested next-6 (from Round 3)
+**Canon → Probe → Sensorium → Squeeze → Coulomb → Loom** — Canon+Probe are cheap
+enablers (frozen wire vectors; the I2C bring-up tool), then Sensorium/Coulomb open
+the external-hardware domain over the free Grove bus, Squeeze buys back duty on
+every text, and Loom lets you test the whole mesh on the host.
+
+*(Full round-3 data: `tasks/w3wbwee7g.output` — 63 ranked, 8 themes, 12 verdicts.)*
