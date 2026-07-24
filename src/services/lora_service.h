@@ -40,6 +40,11 @@ public:
   void startReceive();
   void pump();          // Marshal: try to send one queued frame this tick
 
+  // Transmit arbitrary bytes immediately under the current radio config (for a
+  // foreign protocol, e.g. a Meshtastic frame). Bypasses the Marshal queue but
+  // charges the duty governor. Caller retunes + restores the radio around it.
+  bool transmitRaw(const uint8_t* buf, size_t n);
+
   int16_t rssi() const { return rssi_; }
   float   snr() const { return snr_; }
   float   channelRssi();   // instantaneous, for Sweep
@@ -54,6 +59,7 @@ public:
   AirLedger& ledger() { return ledger_; }
   const RadioCfg& config() const { return cfg_; }
   const char* lastError() const { return err_; }
+  bool ready() const { return ready_; }
 
 private:
   static const uint8_t MAX_TX_FAILS = 3;

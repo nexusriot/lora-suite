@@ -29,12 +29,14 @@
 #include "apps/mayday.h"
 #include "apps/sweep.h"
 #include "apps/mesh_scan.h"
+#include "apps/mesh_tx.h"
 #include "apps/monitor.h"
 #include "apps/ranger.h"
 #include "apps/chronos.h"
 #include "apps/countdown.h"
 #include "apps/console.h"
 #include "apps/gateway.h"
+#include "apps/probe.h"
 #include "apps/ledger.h"
 #include "apps/reflex.h"
 #include "apps/reactor.h"
@@ -63,12 +65,14 @@ static Breadcrumb breadcrumb;
 static Mayday     mayday;
 static Sweep      sweep;
 static MeshScan   meshScan;
+static MeshTX     meshTx;
 static Monitor    monitor;
 static Ranger     ranger;
 static Chronos     chronos;
 static CountdownApp countdownApp;
 static Console     console;
 static Gateway     gateway;
+static Probe       probe;
 static Ledger      ledgerApp;
 static Reflex      reflexApp;
 static Reactor     reactor;
@@ -78,8 +82,8 @@ static Dropbox    dropbox;
 
 static App* apps[] = {
     &courier, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &radar,
-    &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &monitor, &ranger, &chronos, &countdownApp,
-    &console, &gateway, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
+    &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &monitor, &ranger, &chronos, &countdownApp,
+    &console, &gateway, &probe, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
 static const int APP_COUNT = sizeof(apps) / sizeof(apps[0]);
 
 static ScreenManager sm;
@@ -89,15 +93,17 @@ static Dedup rxDedup;    // separate: dedups archive/unread per message (not the
 static M5Canvas canvas(&M5Cardputer.Display);
 
 // Gateway/Uplink: re-encode a heard frame to its on-air bytes and stream it out
-// USB-CDC as one JSON line (feeds tools/lorakit dissect + a meshobserv fork).
+// the USB serial console as one JSON line (feeds tools/lorakit dissect + a
+// meshobserv fork). Uses printf, not Serial: on the Cardputer-Adv the console is
+// the USB-Serial-JTAG the host sees, and Arduino `Serial` (USB CDC) is not wired.
 static void emitGateway(const Frame& f, const RxMeta& m) {
   uint8_t buf[MAX_FRAME];
   size_t n = encode(f, buf, sizeof(buf));
   if (!n) return;
-  Serial.printf("{\"t\":%lu,\"rssi\":%d,\"snr\":%d,\"hex\":\"",
-                (unsigned long)m.when, m.rssi, (int)m.snr);
-  for (size_t i = 0; i < n; i++) Serial.printf("%02x", buf[i]);
-  Serial.println("\"}");
+  printf("{\"t\":%lu,\"rssi\":%d,\"snr\":%d,\"hex\":\"",
+         (unsigned long)m.when, m.rssi, (int)m.snr);
+  for (size_t i = 0; i < n; i++) printf("%02x", buf[i]);
+  printf("\"}\n");
   ctx.gatewaySent++;
 }
 
@@ -207,9 +213,6 @@ static void onRadioFrame(Frame& f, const RxMeta& m) {
 static void translateKeys() {
   if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) return;
   auto st = M5Cardputer.Keyboard.keysState();
-  printf("[key] n=%u enter=%d:", (unsigned)st.word.size(), st.enter);
-  for (char c : st.word) printf(" %02x", (uint8_t)c);
-  printf("\n");
   KeyEvent ev;
   ev.enter = st.enter;
   ev.del = st.del;
@@ -242,22 +245,26 @@ static void translateKeys() {
 // the chip's event FIFO directly over the internal I2C and dispatch, reusing the
 // library's getKey() char map. (translateKeys() still covers working-IRQ units.)
 static void pollKeyboardAdv() {
+  static bool shift = false;   // tracked across events so capitals/symbols type
   const uint8_t ADDR = 0x34;   // TCA8418
   bool any = false;
   for (int i = 0; i < 16; i++) {   // drain the event FIFO directly (0 = empty)
     uint8_t evb = M5.In_I2C.readRegister8(ADDR, 0x04, 400000);
     if (evb == 0) break;
     any = true;
-    if (!(evb & 0x80)) continue;             // key-down only (bit7 = pressed)
+    bool pressed = evb & 0x80;               // bit7 = pressed (vs released)
     int code = (evb & 0x7f) - 1;
     if (code < 0) continue;
     int rawRow = code / 10, rawCol = code % 10;
     Point2D_t pt;
     pt.x = rawRow * 2 + (rawCol > 3 ? 1 : 0); // remap raw (row,col) to the key grid
     pt.y = rawCol % 4;
-    uint8_t c = M5Cardputer.Keyboard.getKey(pt);
+    KeyValue_t kv = M5Cardputer.Keyboard.getKeyValue(pt);
+    if ((uint8_t)kv.value_first == KEY_LEFT_SHIFT) { shift = pressed; continue; }
+    if (!pressed) continue;                  // other keys act on key-down only
+    // Shift picks value_second — so ';.,/' stay arrows unshifted but type ':>?<' shifted.
+    uint8_t c = (uint8_t)(shift ? kv.value_second : kv.value_first);
     if (c == 0) continue;
-    printf("[key] poll ev=%02x -> %02x '%c'\n", evb, c, (c >= 0x20 && c < 0x7f) ? c : '.');
 
     KeyEvent ev;
     switch (c) {
@@ -291,14 +298,6 @@ void setup() {
   // wrong and the TCA8418 keyboard never comes up. Pin the fallback to the Adv.
   m5cfg.fallback_board = m5::board_t::board_M5CardputerADV;
   M5Cardputer.begin(m5cfg, true);
-  printf("[boot] board=%d (adv=%d)\n",
-                (int)M5.getBoard(), (int)m5::board_t::board_M5CardputerADV);
-  // TEMP: prove TCA8418 I2C reads work (cfg should be non-zero after the lib configured it).
-  printf("[tca] cfg=%02x intstat=%02x ec=%02x\n",
-         M5.In_I2C.readRegister8(0x34, 0x01, 400000),
-         M5.In_I2C.readRegister8(0x34, 0x02, 400000),
-         M5.In_I2C.readRegister8(0x34, 0x03, 400000));
-
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setTextSize(1);
   canvas.setColorDepth(16);
@@ -343,16 +342,6 @@ void setup() {
 
 void loop() {
   M5Cardputer.update();
-
-  // TEMP keyboard diagnostic: 1 Hz heartbeat + current key state (removed once fixed).
-  static uint32_t s_hb = 0;
-  uint32_t hbNow = millis();
-  if (hbNow - s_hb >= 1000) {
-    s_hb = hbNow;
-    uint8_t ec = M5.In_I2C.readRegister8(0x34, 0x03, 400000) & 0x0F;
-    printf("[hb] %lus ec=%d int=%02x\n", (unsigned long)(hbNow / 1000),
-           ec, M5.In_I2C.readRegister8(0x34, 0x02, 400000));
-  }
   loraSvc.loop();          // drains RX + pumps the Marshal TX queue
   gpsSvc.loop();
   clk.loop();

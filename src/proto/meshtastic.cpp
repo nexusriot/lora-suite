@@ -100,6 +100,82 @@ static bool decodeUser(const uint8_t* d, size_t n, MeshPacket& out) {
   return true;
 }
 
+// Telemetry { uint32 time=1; DeviceMetrics device_metrics=2; ... }
+// DeviceMetrics { uint32 battery_level=1; float voltage=2; ... }
+static bool decodeTelemetry(const uint8_t* d, size_t n, MeshPacket& out) {
+  PbReader r(d, n);
+  uint32_t field;
+  uint8_t wire;
+  while (!r.eof()) {
+    if (!r.readTag(field, wire)) return false;
+    if (field == 2 && wire == 2) {
+      const uint8_t* dm; size_t dml;
+      if (!r.readLengthDelimited(dm, dml)) return false;
+      PbReader m(dm, dml);
+      uint32_t f2; uint8_t w2;
+      while (!m.eof()) {
+        if (!m.readTag(f2, w2)) return false;
+        if (f2 == 1 && w2 == 0) {
+          uint64_t v; if (!m.readVarint(v)) return false; out.battery = (uint8_t)v;
+        } else if (f2 == 2 && w2 == 5) {
+          uint32_t bits; if (!m.readFixed32(bits)) return false;
+          float volts; std::memcpy(&volts, &bits, 4);
+          if (volts > 0 && volts < 20) out.voltCv = (uint16_t)(volts * 100 + 0.5f);
+        } else if (!m.skip(w2)) {
+          return false;
+        }
+      }
+      out.hasMetrics = true;
+    } else if (!r.skip(wire)) {
+      return false;
+    }
+  }
+  return out.hasMetrics;
+}
+
+static uint8_t xorHash(const uint8_t* p, size_t n) {
+  uint8_t h = 0;
+  for (size_t i = 0; i < n; i++) h ^= p[i];
+  return h;
+}
+
+uint8_t meshtasticDefaultChannelHash() {
+  // The default primary channel's empty name resolves to the modem-preset name.
+  static const char NAME[] = "MediumFast";
+  return (uint8_t)(xorHash((const uint8_t*)NAME, sizeof(NAME) - 1) ^ xorHash(MESH_DEFAULT_KEY, 16));
+}
+
+size_t meshtastic_encode_text(uint32_t from, uint32_t packetId, uint8_t channelHash,
+                              const char* text, const uint8_t key[16],
+                              uint8_t* out, size_t cap) {
+  if (!text || !out) return 0;
+  size_t tlen = std::strlen(text);
+  if (tlen == 0 || tlen > 200) return 0;
+
+  uint8_t data[256];
+  PbWriter w(data, sizeof(data));
+  if (!w.putVarintField(1, MESH_PORT_TEXT)) return 0;               // portnum
+  if (!w.putBytesField(2, (const uint8_t*)text, tlen)) return 0;    // payload
+
+  uint8_t nonce[16];
+  meshtastic_nonce(packetId, from, nonce);
+  aes128_ctr_xor(key, nonce, data, w.len);
+
+  size_t total = MESH_HEADER_LEN + w.len;
+  if (cap < total) return 0;
+  out[0] = 0xFF; out[1] = 0xFF; out[2] = 0xFF; out[3] = 0xFF;       // to = broadcast
+  out[4] = (uint8_t)from;  out[5] = (uint8_t)(from >> 8);
+  out[6] = (uint8_t)(from >> 16); out[7] = (uint8_t)(from >> 24);
+  out[8] = (uint8_t)packetId; out[9] = (uint8_t)(packetId >> 8);
+  out[10] = (uint8_t)(packetId >> 16); out[11] = (uint8_t)(packetId >> 24);
+  out[12] = 0x63;              // flags: hop_limit=3 | hop_start=3<<5  (VERIFY)
+  out[13] = channelHash;
+  out[14] = 0;                 // next_hop
+  out[15] = 0;                 // relay_node
+  std::memcpy(out + MESH_HEADER_LEN, data, w.len);
+  return total;
+}
+
 bool meshtastic_decode(const uint8_t* buf, size_t n, const uint8_t key[16], MeshPacket& out) {
   if (n <= MESH_HEADER_LEN) return false;
   out = MeshPacket{};
@@ -135,8 +211,14 @@ bool meshtastic_decode(const uint8_t* buf, size_t n, const uint8_t key[16], Mesh
     }
   }
   out.portnum = portnum;
+  if (portnum == MESH_PORT_TEXT && dp) {
+    copyStr(out.text, sizeof(out.text), dp, dl);
+    out.hasText = out.text[0] != 0;
+    return out.hasText;
+  }
   if (portnum == MESH_PORT_POSITION && dp) return decodePosition(dp, dl, out);
   if (portnum == MESH_PORT_NODEINFO && dp) return decodeUser(dp, dl, out);
+  if (portnum == MESH_PORT_TELEMETRY && dp) return decodeTelemetry(dp, dl, out);
   return false;
 }
 

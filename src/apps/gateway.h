@@ -9,8 +9,8 @@
 namespace ls {
 
 // Uplink control panel. When ON, every frame heard on our channel is re-encoded
-// to its on-air bytes and streamed out USB-CDC as one JSON line (see main.cpp
-// emitGateway) — piped into `tools/lorakit dissect` or a meshobserv fork to map
+// to its on-air bytes and streamed out the USB serial console as one JSON line
+// (see main.cpp emitGateway) — piped into `tools/lorakit dissect` or a fork to map
 // the fleet. Runs in the background (via the RX chokepoint), so you can leave it
 // on and use other apps; toggling it is all this screen does.
 class Gateway : public App {
@@ -50,7 +50,7 @@ public:
     g.drawString(s, 6, y); y += 13;
 
     g.setTextColor(theme::MUTED, theme::BG);
-    g.drawString("USB-CDC JSON @115200", 6, y); y += 11;
+    g.drawString("USB serial JSON", 6, y); y += 11;
     g.drawString("-> lorakit dissect", 6, y); y += 14;
     g.drawString("Enter=toggle  c=clear", 6, y);
 

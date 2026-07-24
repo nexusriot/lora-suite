@@ -100,6 +100,22 @@ void LoRaService::pump() {
   }
 }
 
+bool LoRaService::transmitRaw(const uint8_t* buf, size_t n) {
+  if (!ready_ || !buf || n == 0) return false;
+  int st;
+  {
+    SpiBus::Guard g;
+    st = s_radio.transmit(const_cast<uint8_t*>(buf), n);
+  }
+  startReceive();
+  if (st == RADIOLIB_ERR_NONE) {
+    uint8_t pl = n > MAX_PAYLOAD ? MAX_PAYLOAD : (uint8_t)n;
+    duty_.record(millis(), (uint32_t)timeOnAirMs(cfg_, pl));   // charge airtime honestly
+    return true;
+  }
+  return false;
+}
+
 void LoRaService::startReceive() {
   if (!ready_) return;
   SpiBus::Guard g;

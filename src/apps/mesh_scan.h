@@ -1,6 +1,7 @@
 #pragma once
 #include <M5Unified.h>
 #include <cstdio>
+#include <cstring>
 #include "../shell/app.h"
 #include "../shell/context.h"
 #include "../services/lora_service.h"
@@ -52,7 +53,7 @@ public:
   }
 
   void onKey(const KeyEvent& k) override {
-    if (k.ch == 'c') { heard_ = decoded_ = 0; }
+    if (k.ch == 'c') { heard_ = decoded_ = texts_ = 0; lastText_[0] = 0; }
     else if (k.enter) ctx.navRequest = "MESH";         // jump to the scanned-node list
   }
 
@@ -82,7 +83,14 @@ public:
     g.drawString(s, 6, y); y += 12;
 
     std::snprintf(s, sizeof(s), "overlay: %u nodes", (unsigned)ctx.mesh.size());
-    g.drawString(s, 6, y); y += 14;
+    g.drawString(s, 6, y); y += 12;
+
+    if (texts_) {
+      std::snprintf(s, sizeof(s), "txt %u: %.20s", (unsigned)texts_, lastText_);
+      g.setTextColor(theme::ACCENT, theme::BG);
+      g.drawString(s, 6, y);
+    }
+    y += 14;
 
     g.setTextColor(theme::MUTED, theme::BG);
     g.drawString("Enter=list  c=clear", 6, y);
@@ -93,8 +101,9 @@ public:
 private:
   static inline MeshScan* active_ = nullptr;
   RadioCfg saved_;
-  uint32_t heard_ = 0, decoded_ = 0, lastMs_ = 0;
+  uint32_t heard_ = 0, decoded_ = 0, lastMs_ = 0, texts_ = 0;
   int16_t lastRssi_ = 0;
+  char lastText_[64] = {0};
 
   static void rawTrampoline(const uint8_t* buf, size_t n, const RxMeta& m) {
     if (active_) active_->handleRaw(buf, n, m);
@@ -109,6 +118,12 @@ private:
     decoded_++;
     if (p.hasPos) ctx.mesh.setPos(p.from, p.lat, p.lon, m.when, SRC_SCAN);
     if (p.hasUser) ctx.mesh.setUser(p.from, p.longName, p.shortName, mapRole(p.role), m.when, SRC_SCAN);
+    if (p.hasMetrics) ctx.mesh.setMetrics(p.from, p.battery, p.voltCv, m.when, SRC_SCAN);
+    if (p.hasText) {
+      texts_++;
+      std::strncpy(lastText_, p.text, sizeof(lastText_) - 1);
+      lastText_[sizeof(lastText_) - 1] = 0;
+    }
     ctx.mesh.setRssi(p.from, m.rssi, m.when, SRC_SCAN);
   }
 

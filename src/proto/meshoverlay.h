@@ -67,11 +67,14 @@ public:
   void setUser(uint32_t id, const char* longName, const char* shortName,
                uint8_t role, uint32_t now, uint8_t source);
   void setBattery(uint32_t id, uint8_t battPct, uint32_t now, uint8_t source);
+  void setMetrics(uint32_t id, uint8_t battPct, uint16_t voltCv, uint32_t now, uint8_t source);
   void setRssi(uint32_t id, int16_t rssi, uint32_t now, uint8_t source);
 
   // Import path: drop existing SRC_IMPORT nodes, then parse a CSV buffer.
-  // Returns the number of data rows ingested. Does NOT evict live nodes — rows
-  // past capacity are dropped (the tool sorts nearest-first, so the near ones win).
+  // Returns the number of data rows ingested. Does NOT evict or overwrite live
+  // (SRC_SCAN) nodes — a row whose id matches a live node is skipped so the
+  // scanned fix wins, and rows past capacity are dropped (the tool sorts
+  // nearest-first, so the near ones win).
   size_t ingestCsv(const char* text, size_t n, uint32_t now);
   bool   ingestCsvLine(const char* line, uint32_t now);   // one row; false if not a data row
 

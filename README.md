@@ -1,12 +1,13 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **26** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **28** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
 
 **Docs:**
+- [`docs/FEATURES.md`](docs/FEATURES.md) — what every app + subsystem is for, and how to use it
 - [`DESIGN.md`](DESIGN.md) — architecture, layers, wire protocol, and subsystems
 - [`ROADMAP.md`](ROADMAP.md) — what's built + the prioritized feature backlog
 - [`docs/design-brief.html`](docs/design-brief.html) — rendered design brief (open in a browser)
@@ -54,13 +55,15 @@ can never interleave with a radio transaction. See `src/hal/`.
 | TRK | Breadcrumb | Logs track + heard nodes to microSD (CSV), GPS-timestamped |
 | SOS | Mayday | Distress + dead-man switch — confirmed panic, IMU-stillness auto-trigger, homing view for received distress |
 | SWP | Sweep | RSSI scan across a channel plan, waterfall bars; `m` jumps to the EU_868 Meshtastic band |
-| SCAN | MeshScan | Over-the-air Meshtastic receiver — retunes, decrypts the public channel, decoded nodes land in Mesh (Direction B) |
+| SCAN | MeshScan | Over-the-air Meshtastic receiver — retunes, decrypts the public channel, decodes position/name/telemetry/text into Mesh (Direction B) |
+| MTX | MeshTX | Send a text INTO the Meshtastic public channel — two-way interop (Direction B, TX) |
 | MON | Monitor | Promiscuous frame monitor (type / addr / RSSI / SNR) |
 | RNG | Ranger | Ping/echo link test — RSSI, SNR, RTT, loss, distance |
 | TIME | Chronos | Mesh time-sync (GPS→TIMESYNC) for the RTC-less fleet + daylight-length almanac |
 | CDWN | Countdown | Mesh-wide synchronized timer anchored to absolute UTC — every node fires together at T-0 |
 | CFG | Console | Radio profiles + live airtime / duty / link-budget calculator; `m` applies the Meshtastic preset |
-| GW | Gateway | Uplink heard frames over USB-CDC as JSON (feeds `tools/lorakit` dissect / a map of your fleet) |
+| GW | Gateway | Uplink heard frames over USB serial as JSON (feeds `tools/lorakit` dissect / a map of your fleet) |
+| PRB | Probe | Hardware self-test — I2C scan + radio/GPS/SD/keyboard/board status on one screen |
 | LOG | Ledger | Per-type airtime audit against the 1% duty budget + a daily SD summary |
 | RULE | Reflex | On-device IFTTT: event→action rules (RX-type / alert / low-battery / periodic) |
 | PWR | Reactor | Battery-aware power state machine (CPU/LCD degrade with hysteresis) + Survival low-power beacon |
@@ -168,7 +171,7 @@ src/
   services/  lora · gps · storage · clock                                  (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      26 apps                                                       (device)
+  apps/      28 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/    host unit tests (g++)
@@ -198,7 +201,7 @@ Notes:
 bash test/native/run.sh
 ```
 
-Builds and runs the portable-core suite (324 checks): frame codec (round-trip,
+Builds and runs the portable-core suite (341 checks): frame codec (round-trip,
 CRC rejection, bounds), LoRa airtime math, the duty-cycle governor + next-TX
 math, the Marshal priority queue (class-based admission + age-promotion), mesh
 dedup, node table + geo, the contact roster (+ serialization), the solar

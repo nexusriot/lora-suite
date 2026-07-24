@@ -126,6 +126,20 @@ void run_meshoverlay_tests() {
     CHECK(o.find(9) != nullptr);
   }
 
+  // --- an import row must NOT downgrade a live scanned node with the same id ---
+  {
+    MeshOverlay o;
+    o.setPos(5, 40.0, 44.0, 100, SRC_SCAN);
+    o.setRssi(5, -70, 100, SRC_SCAN);
+    const char* row = "5,10.0,20.0,80,0,1,0,,IMP,imported\n";  // same id 5 as the scan
+    o.ingestCsv(row, std::strlen(row), 200);
+    const MeshNode* m = o.find(5);
+    CHECK(m && m->source == SRC_SCAN);   // still a live scan, not reclassified to import
+    CHECK_NEAR(m->lat, 40.0, 1e-6);      // live position preserved, not the import's 10.0
+    CHECK(m->rssi == -70);               // live RSSI preserved
+    CHECK(o.size() == 1);                // no duplicate slot for id 5
+  }
+
   // --- live setters upsert and update the same slot ---
   {
     MeshOverlay o;

@@ -81,6 +81,14 @@ void MeshOverlay::setBattery(uint32_t id, uint8_t battPct, uint32_t now, uint8_t
   if (now > m.lastHeard) m.lastHeard = now;
 }
 
+void MeshOverlay::setMetrics(uint32_t id, uint8_t battPct, uint16_t voltCv, uint32_t now, uint8_t source) {
+  MeshNode& m = slotFor(id, source, now);
+  if (battPct) m.battPct = battPct;
+  if (voltCv) m.voltCv = voltCv;
+  m.source = source;
+  if (now > m.lastHeard) m.lastHeard = now;
+}
+
 void MeshOverlay::setRssi(uint32_t id, int16_t rssi, uint32_t now, uint8_t source) {
   MeshNode& m = slotFor(id, source, now);
   m.rssi = rssi;
@@ -166,6 +174,7 @@ bool MeshOverlay::ingestCsvLine(const char* line, uint32_t now) {
 
   if (id == 0) return false;
   MeshNode* m = find((uint32_t)id);
+  if (m && m->source != SRC_IMPORT) return false;   // a live scanned node wins — don't downgrade it
   if (!m) {
     if (count_ >= CAP) return false;        // import never evicts a live node
     m = &items_[count_++];

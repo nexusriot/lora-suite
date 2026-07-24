@@ -14,7 +14,12 @@ namespace ls {
 
 constexpr size_t MESH_HEADER_LEN = 16;
 
-enum MeshPort : uint8_t { MESH_PORT_POSITION = 3, MESH_PORT_NODEINFO = 4 };
+enum MeshPort : uint8_t {
+  MESH_PORT_TEXT      = 1,   // TEXT_MESSAGE_APP — payload is raw UTF-8
+  MESH_PORT_POSITION  = 3,
+  MESH_PORT_NODEINFO  = 4,
+  MESH_PORT_TELEMETRY = 67,  // DeviceMetrics (battery/voltage)
+};
 
 // Well-known default public-channel key (the "AQ==" PSK expansion).
 // VERIFY against the Meshtastic firmware during on-hardware bring-up.
@@ -41,6 +46,13 @@ struct MeshPacket {
   char     shortName[5] = {0};
   uint8_t  hwModel = 0;   // raw Meshtastic HardwareModel enum
   uint8_t  role = 0;      // raw Meshtastic device Role enum
+
+  bool     hasText = false;
+  char     text[64] = {0};
+
+  bool     hasMetrics = false;
+  uint8_t  battery = 0;   // percent
+  uint16_t voltCv = 0;    // centivolts (voltage * 100)
 };
 
 // Build the 16-byte AES-CTR nonce from (packetId, fromNode).
@@ -50,7 +62,18 @@ void meshtastic_nonce(uint32_t packetId, uint32_t fromNode, uint8_t nonce[16]);
 // Decode one received frame (header + encrypted payload). `key` is the 16-byte
 // channel key (MESH_DEFAULT_KEY for the public channel). Returns true only when
 // the header parses, the payload decrypts to a valid Data protobuf, and the port
-// is one we understand (Position or NodeInfo) — so a wrong key fails closed.
+// is one we understand (Text/Position/NodeInfo/Telemetry) — a wrong key fails closed.
 bool meshtastic_decode(const uint8_t* buf, size_t n, const uint8_t key[16], MeshPacket& out);
+
+// Channel hash for the default public channel (xorHash(name) ^ xorHash(key), with
+// name = the MEDIUM_FAST preset name). VERIFY against the firmware on bring-up.
+uint8_t meshtasticDefaultChannelHash();
+
+// Build a complete Meshtastic frame that broadcasts `text` on the public channel
+// (16-byte header + AES-CTR-encrypted Data{portnum=TEXT}). Returns the frame
+// length written to out, or 0 on error. VERIFY header flags/hash on bring-up.
+size_t meshtastic_encode_text(uint32_t from, uint32_t packetId, uint8_t channelHash,
+                              const char* text, const uint8_t key[16],
+                              uint8_t* out, size_t cap);
 
 } // namespace ls

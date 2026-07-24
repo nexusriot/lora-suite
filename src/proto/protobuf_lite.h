@@ -22,4 +22,20 @@ struct PbReader {
   bool skip(uint8_t wire);                              // advance past an unwanted field
 };
 
+// Minimal protobuf writer — enough to build the Meshtastic Data/Position/Text
+// messages for TX. Every put returns false on overflow (bounds-checked).
+struct PbWriter {
+  uint8_t* buf;
+  size_t cap;
+  size_t len = 0;
+  PbWriter(uint8_t* b, size_t c) : buf(b), cap(c) {}
+
+  bool putByte(uint8_t b);
+  bool putVarint(uint64_t v);
+  bool putTag(uint32_t field, uint8_t wire);
+  bool putVarintField(uint32_t field, uint64_t v);       // wire type 0
+  bool putBytesField(uint32_t field, const uint8_t* d, size_t n);  // wire type 2
+  bool putFixed32Field(uint32_t field, uint32_t v);      // wire type 5
+};
+
 } // namespace ls

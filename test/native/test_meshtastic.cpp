@@ -139,4 +139,52 @@ void run_meshtastic_tests() {
     CHECK(c.preamble == 16);
     CHECK(c.syncWord == 0x2b);
   }
+
+  // --- TX: encode a text frame, then decode it back (round-trip) ---
+  {
+    uint8_t frame[128];
+    uint8_t hash = meshtasticDefaultChannelHash();
+    size_t nn = meshtastic_encode_text(0xAABBCCDD, 0x11223344, hash, "hello mesh",
+                                       MESH_DEFAULT_KEY, frame, sizeof(frame));
+    CHECK(nn > MESH_HEADER_LEN);
+    MeshPacket mp;
+    CHECK(meshtastic_decode(frame, nn, MESH_DEFAULT_KEY, mp));
+    CHECK(mp.from == 0xAABBCCDD && mp.id == 0x11223344 && mp.channelHash == hash);
+    CHECK(mp.portnum == MESH_PORT_TEXT && mp.hasText);
+    CHECK(std::strcmp(mp.text, "hello mesh") == 0);
+    CHECK(meshtastic_encode_text(1, 2, 0, "", MESH_DEFAULT_KEY, frame, sizeof(frame)) == 0); // empty rejected
+  }
+
+  // --- decode a received text message (portnum 1, raw payload) ---
+  {
+    std::vector<uint8_t> data;
+    putTag(data, 1, 0); putVarint(data, MESH_PORT_TEXT);
+    const char* msg = "hi there";
+    putBytes(data, 2, (const uint8_t*)msg, std::strlen(msg));
+    auto f = buildFrame(to, from, id, 0, data);
+    MeshPacket mp;
+    CHECK(meshtastic_decode(f.data(), f.size(), MESH_DEFAULT_KEY, mp));
+    CHECK(mp.portnum == MESH_PORT_TEXT && mp.hasText);
+    CHECK(std::strcmp(mp.text, "hi there") == 0);
+  }
+
+  // --- decode Telemetry -> DeviceMetrics (battery + voltage) ---
+  {
+    std::vector<uint8_t> dm;                       // DeviceMetrics
+    putTag(dm, 1, 0); putVarint(dm, 90);            // battery_level = 90
+    float volts = 3.85f; uint32_t vbits;
+    std::memcpy(&vbits, &volts, 4);
+    putTag(dm, 2, 5); putFixed32(dm, vbits);        // voltage = 3.85 (float)
+    std::vector<uint8_t> tel;                       // Telemetry
+    putBytes(tel, 2, dm.data(), dm.size());         // device_metrics = dm
+    std::vector<uint8_t> data;                      // Data
+    putTag(data, 1, 0); putVarint(data, MESH_PORT_TELEMETRY);
+    putBytes(data, 2, tel.data(), tel.size());
+    auto f = buildFrame(to, from, id, 0, data);
+    MeshPacket mp;
+    CHECK(meshtastic_decode(f.data(), f.size(), MESH_DEFAULT_KEY, mp));
+    CHECK(mp.portnum == MESH_PORT_TELEMETRY && mp.hasMetrics);
+    CHECK(mp.battery == 90);
+    CHECK(mp.voltCv == 385);
+  }
 }

@@ -57,4 +57,38 @@ bool PbReader::skip(uint8_t wire) {
   }
 }
 
+bool PbWriter::putByte(uint8_t b) {
+  if (len >= cap) return false;
+  buf[len++] = b;
+  return true;
+}
+
+bool PbWriter::putVarint(uint64_t v) {
+  while (v >= 0x80) {
+    if (!putByte((uint8_t)(v | 0x80))) return false;
+    v >>= 7;
+  }
+  return putByte((uint8_t)v);
+}
+
+bool PbWriter::putTag(uint32_t field, uint8_t wire) {
+  return putVarint(((uint64_t)field << 3) | wire);
+}
+
+bool PbWriter::putVarintField(uint32_t field, uint64_t v) {
+  return putTag(field, 0) && putVarint(v);
+}
+
+bool PbWriter::putBytesField(uint32_t field, const uint8_t* d, size_t n) {
+  if (!putTag(field, 2) || !putVarint(n)) return false;
+  for (size_t i = 0; i < n; i++) if (!putByte(d[i])) return false;
+  return true;
+}
+
+bool PbWriter::putFixed32Field(uint32_t field, uint32_t v) {
+  if (!putTag(field, 5)) return false;
+  return putByte(v & 0xff) && putByte((v >> 8) & 0xff) &&
+         putByte((v >> 16) & 0xff) && putByte((v >> 24) & 0xff);
+}
+
 } // namespace ls
