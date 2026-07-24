@@ -1,7 +1,7 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **23** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **26** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
@@ -48,16 +48,19 @@ can never interleave with a radio transaction. See `src/hal/`.
 | FLT | Fleet | Squad-vitals dashboard (battery/presence/RSSI/age, worst-first) + set your own Presence; Enter → message a node |
 | RLY | Relay | Mesh control panel + node table (forwarding runs in the background for every screen) |
 | BCN | Beacon | Periodic GPS position, interval auto-throttled to the duty budget |
-| RDR | Radar | Polar plot of nodes by bearing + distance from your fix |
+| RDR | Radar | Polar plot of nodes by bearing + distance from your fix (foreign Meshtastic nodes shown as hollow markers) |
+| MESH | Mesh | Foreign Meshtastic nodes from a meshmap.net snapshot (SD) — read-only situational awareness, nearest-first, `r` reloads |
 | PF | Pathfinder | Capture/share waypoints and home to a target — bearing arrow + range + closing speed |
 | TRK | Breadcrumb | Logs track + heard nodes to microSD (CSV), GPS-timestamped |
 | SOS | Mayday | Distress + dead-man switch — confirmed panic, IMU-stillness auto-trigger, homing view for received distress |
-| SWP | Sweep | RSSI scan across a channel plan, waterfall bars |
+| SWP | Sweep | RSSI scan across a channel plan, waterfall bars; `m` jumps to the EU_868 Meshtastic band |
+| SCAN | MeshScan | Over-the-air Meshtastic receiver — retunes, decrypts the public channel, decoded nodes land in Mesh (Direction B) |
 | MON | Monitor | Promiscuous frame monitor (type / addr / RSSI / SNR) |
 | RNG | Ranger | Ping/echo link test — RSSI, SNR, RTT, loss, distance |
 | TIME | Chronos | Mesh time-sync (GPS→TIMESYNC) for the RTC-less fleet + daylight-length almanac |
 | CDWN | Countdown | Mesh-wide synchronized timer anchored to absolute UTC — every node fires together at T-0 |
-| CFG | Console | Radio profiles + live airtime / duty / link-budget calculator |
+| CFG | Console | Radio profiles + live airtime / duty / link-budget calculator; `m` applies the Meshtastic preset |
+| GW | Gateway | Uplink heard frames over USB-CDC as JSON (feeds `tools/lorakit` dissect / a map of your fleet) |
 | LOG | Ledger | Per-type airtime audit against the 1% duty budget + a daily SD summary |
 | RULE | Reflex | On-device IFTTT: event→action rules (RX-type / alert / low-battery / periodic) |
 | PWR | Reactor | Battery-aware power state machine (CPU/LCD degrade with hysteresis) + Survival low-power beacon |
@@ -74,6 +77,7 @@ can never interleave with a radio transaction. See `src/hal/`.
 - **Airtime attribution** — every transmission carries a non-wire `airTag` (its type, or a relay bucket) charged to the **Ledger** (`AirLedger`) at send time, so you can see what's eating the duty budget; a daily total is appended to `/duty.csv`.
 - **Message capture** — received/sent text is deduped (a dedicated `rxDedup`, so relayed copies count once) and queued to `ctx.archive`, which **Archive** drains to SD from its background tick (never on the radio RX path).
 - **Reflex** — an on-device event→action rule engine: frame events (RX-type, alert) evaluate in the RX handler, timer/battery events on `background()`; actions run through the duty-gated send path with per-rule cooldowns + a self-src guard so automation can't loop.
+- **Meshtastic interop** — foreign Meshtastic nodes (imported from meshmap.net, or heard over the air by **MeshScan**) live in a `MeshOverlay` kept out of the peer table; shown in **Mesh** + on **Radar**. **Gateway** uplinks our own frames to a host. See [Meshtastic interoperability](#meshtastic-interoperability).
 
 Keys: arrows are the `;` `.` `,` `/` cluster, `` ` `` is ESC/back, `Enter`
 confirms, `\` arms a global distress confirm (ignored while typing). Each app
@@ -94,20 +98,82 @@ Wire version **2** (`PROTO_VERSION`) — v2 grew the Pulse health TLV to 7 bytes
 (added presence); `decode()` rejects other versions, so mixed-firmware nodes fail
 closed rather than mis-parsing.
 
+## Meshtastic interoperability
+
+lora-suite is **not** Meshtastic — different framing, addressing and crypto — but
+it shares the SX1262 and the 868 band, so it can *observe* the local Meshtastic
+world three ways. Foreign nodes live in a `MeshOverlay` kept out of the peer
+`NodeTable` (never messaged or relayed); they show in the **Mesh** app and as
+hollow markers on **Radar**.
+
+### Import from meshmap.net (Direction A)
+
+[meshmap.net](https://meshmap.net/) is a live map of Meshtastic nodes seen by the
+public MQTT server. Its `/nodes.json` feed is ~3.7 MB — too big for the ESP32 — so
+`tools/meshpull` trims it to a small CSV you copy to the SD card:
+
+```bash
+cd tools/meshpull
+go run . -lat 40.18 -lon 44.51 -radius 30 -topic msh/EU_868 -max 96 -out import.csv
+# copy import.csv to the SD card as /mesh/import.csv
+```
+
+In **Mesh**: `;`/`.` scroll, `r` reloads, `Enter` opens a detail card (name, `!id`,
+role, hardware, battery/voltage, position, distance/bearing, last-heard age). Rows
+dim as their meshmap "last heard" ages. Poll meshmap.net at most once a minute
+(60 s cache); schedule the tool with cron if you want it fresh.
+
+**CSV format** (`/mesh/import.csv`) — nine comma-separated fixed fields, then the
+long name as the rest of the line (which may contain commas):
+
+```
+# generated <unix>
+id,lat,lon,batt,volt,role,seen,hw,short,long
+```
+
+id (uint32), lat/lon (deg), batt (0–255; >100 = externally powered), volt
+(centivolts), role (a code — see `meshoverlay.h`), seen (unix, last heard via
+MQTT), hw (≤9 chars), short (≤4). `tools/meshpull` and the device parser
+(`src/proto/meshoverlay.h`) share this format and are both unit-tested.
+
+### Scan over the air — MeshScan (Direction B)
+
+**MeshScan** (`SCAN`) retunes the radio to the EU_868 / MEDIUM_FAST preset (869.525
+MHz), goes receive-only, and decrypts the public channel (the `AQ==` key) — decoded
+Position/NodeInfo land in the overlay with live RSSI. `Enter` jumps to the Mesh
+list. **One radio: while this screen is open you are deaf to your own mesh.** The
+decode chain (AES-128-CTR + a protobuf-lite reader, `src/proto/meshtastic.*`) is
+host-tested; the exact key/nonce/modem constants are marked to verify against the
+Meshtastic firmware on bring-up. Preview the raw band energy first with **Sweep** → `m`.
+
+### Uplink your fleet — Gateway (Direction C2)
+
+**Gateway** (`GW`) streams every frame heard on *our* channel out USB-CDC as JSON.
+Pipe it into the host dissector (or a meshobserv fork) to map your own fleet:
+
+```bash
+pio device monitor | (cd tools/lorakit && go run ./cmd/dissect)
+```
+
+`tools/lorakit` is a byte-compatible Go port of the wire codec, cross-checked
+against a C-encoded golden frame.
+
 ## Layout
 
 ```
 src/
-  proto/     frame · airtime · duty · dedup · nodetable · geo · payloads
-             qos · txqueue · roster · solar                               (portable, tested)
-  crypto/    chacha20 · channel                                            (portable, tested)
+  proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
+             roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite  (portable, tested)
+  crypto/    chacha20 · channel · aes                                      (portable, tested)
   services/  lora · gps · storage · clock                                  (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      23 apps                                                       (device)
+  apps/      26 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
-test/native/ host unit tests (g++)
+test/native/    host unit tests (g++)
+tools/meshpull/ meshmap.net -> SD import tool (Go, tested)
+tools/lorakit/  wire-codec Go port + `dissect` CLI (tested)
 ```
 
 ## Build & flash (device)
@@ -132,12 +198,21 @@ Notes:
 bash test/native/run.sh
 ```
 
-Builds and runs the portable-core suite (177 checks): frame codec (round-trip,
+Builds and runs the portable-core suite (324 checks): frame codec (round-trip,
 CRC rejection, bounds), LoRa airtime math, the duty-cycle governor + next-TX
 math, the Marshal priority queue (class-based admission + age-promotion), mesh
 dedup, node table + geo, the contact roster (+ serialization), the solar
-almanac, ChaCha20 + channel crypto, and the position/telemetry/health/waypoint/
-timesync payload codecs.
+almanac, ChaCha20 + channel crypto, **AES-128 (FIPS-197 vectors) + CTR**, the
+**Meshtastic frame decode** (header + AES-CTR + protobuf → Position/NodeInfo),
+the Meshtastic overlay + import CSV parser, and the position/telemetry/health/
+waypoint/timesync payload codecs.
+
+The Go host tools have their own tests:
+
+```
+cd tools/meshpull && go test ./...
+cd tools/lorakit  && go test ./...
+```
 
 ## Defaults / decisions
 

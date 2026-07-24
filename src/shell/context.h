@@ -3,6 +3,7 @@
 #include "../proto/frame.h"
 #include "../proto/airtime.h"
 #include "../proto/nodetable.h"
+#include "../proto/meshoverlay.h"
 #include "../proto/roster.h"
 #include "../proto/rules.h"
 #include "../crypto/channel.h"
@@ -26,7 +27,8 @@ struct Context {
   Storage*     store = nullptr;
   Clock*       clock = nullptr;
 
-  NodeTable  nodes;
+  NodeTable   nodes;
+  MeshOverlay mesh;       // foreign Meshtastic nodes (imported snapshot / OTA scan)
   Roster     roster;      // durable name<->address contacts
   ArchiveLog archive;     // pending message lines to persist (drained by Archive)
   RuleEngine rules;       // Reflex automation rules
@@ -52,6 +54,9 @@ struct Context {
   bool       pulseEnabled = true;       // append health TLV to outbound frames
   uint32_t   lastHealthMs = 0;
   uint32_t   healthPeriodMs = 120000;   // min gap between piggybacked health TLVs
+
+  bool     gatewayOn = false;           // Gateway app: uplink heard frames over USB-CDC
+  uint32_t gatewaySent = 0;
 
   uint16_t myAddr    = 0; // this node's short address
   char     callName[12] = "node";

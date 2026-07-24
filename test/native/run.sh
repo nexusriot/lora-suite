@@ -11,10 +11,14 @@ g++ -std=c++17 -O2 -Wall -Wextra \
   "$root"/src/proto/airtime.cpp \
   "$root"/src/proto/geo.cpp \
   "$root"/src/proto/nodetable.cpp \
+  "$root"/src/proto/meshoverlay.cpp \
+  "$root"/src/proto/protobuf_lite.cpp \
+  "$root"/src/proto/meshtastic.cpp \
   "$root"/src/proto/payloads.cpp \
   "$root"/src/proto/roster.cpp \
   "$root"/src/proto/solar.cpp \
   "$root"/src/crypto/chacha20.cpp \
+  "$root"/src/crypto/aes.cpp \
   "$root"/src/crypto/channel.cpp \
   -o "$out"
 

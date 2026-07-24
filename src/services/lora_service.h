@@ -12,6 +12,10 @@ namespace ls {
 // Called for every decoded, CRC-valid frame off the air (raw, pre-channel-filter).
 using RxFn = void (*)(Frame&, const RxMeta&);
 
+// Called with the raw radio bytes of every received packet (before our decode).
+// Used by the Meshtastic scanner to parse a foreign protocol on the shared band.
+using RawRxFn = void (*)(const uint8_t*, size_t, const RxMeta&);
+
 // Thin driver around RadioLib's SX1262: owns the radio state machine, the duty
 // governor, and the shared-SPI arbitration. It knows nothing about channels,
 // addressing or apps — that glue lives in net.cpp / main.cpp.
@@ -20,6 +24,12 @@ public:
   bool begin(const RadioCfg& cfg);
   bool applyConfig(const RadioCfg& cfg);
   void onReceive(RxFn fn) { rx_ = fn; }
+  void onRawReceive(RawRxFn fn) { rawRx_ = fn; }   // raw-bytes tap (Meshtastic scanner)
+
+  // Receive-only guard: while true, pump() never transmits. The scanner sets this
+  // (with the radio retuned to a foreign preset) so no app accidentally airs our
+  // frames on someone else's channel.
+  void setRxOnly(bool on) { rxOnly_ = on; }
 
   // Queue f for transmission through the Marshal scheduler (QoS priority + CAD
   // listen-before-talk + duty governor). urgent bypasses the duty gate. Returns
@@ -55,6 +65,8 @@ private:
   uint32_t backoffUntil_ = 0;
   uint8_t  txFails_ = 0;
   RxFn rx_ = nullptr;
+  RawRxFn rawRx_ = nullptr;
+  bool rxOnly_ = false;
   int16_t rssi_ = 0;
   float   snr_ = 0;
   const char* err_ = "";

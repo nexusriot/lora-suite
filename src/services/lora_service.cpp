@@ -54,7 +54,7 @@ bool LoRaService::sendFrame(Frame& f, bool urgent) {
 }
 
 void LoRaService::pump() {
-  if (!ready_ || queue_.empty()) return;
+  if (!ready_ || rxOnly_ || queue_.empty()) return;
   uint32_t now = millis();
   if (now < backoffUntil_) return;
 
@@ -125,11 +125,10 @@ void LoRaService::loop() {
     startReceive();
 
     if (st == RADIOLIB_ERR_NONE && n > 0) {
+      RxMeta m{rssi_, (int8_t)snr_, millis()};
+      if (rawRx_) rawRx_(buf, n, m);        // raw tap (Meshtastic scanner) sees every packet
       Frame f;
-      if (decode(buf, n, f) && rx_) {
-        RxMeta m{rssi_, (int8_t)snr_, millis()};
-        rx_(f, m);
-      }
+      if (decode(buf, n, f) && rx_) rx_(f, m);
     }
   }
   pump();   // Marshal: attempt one queued transmission

@@ -7,6 +7,7 @@
 #include "../proto/airtime.h"
 #include "../services/lora_service.h"
 #include "../services/storage.h"
+#include "../proto/meshtastic.h"
 #include "../ui/theme.h"
 #include "../ui/widgets.h"
 
@@ -35,6 +36,7 @@ public:
     else if (k.ch == 's' && ctx.store) ctx.store->saveProfile(slot_, ctx.cfg, "");
     else if (k.ch == 'l' && ctx.store) { char psk[24]; ctx.store->loadProfile(slot_, ctx.cfg, psk, sizeof(psk)); apply(); }
     else if (k.ch == 'r') region_ = (region_ + 1) % 3, applyRegion();
+    else if (k.ch == 'm') { ctx.cfg = meshtasticPresetEU868(); apply(); }  // tune to the local Meshtastic mesh
   }
 
   void draw(M5Canvas& g) override {
@@ -75,7 +77,7 @@ public:
     std::snprintf(v, sizeof(v), "max/hr %d", toa > 0 ? (int)(budget / toa) : 0); g.drawString(v, fx, fy); fy += 11;
     std::snprintf(v, sizeof(v), "FSPL1k %ddB", (int)pathLossDb(c, 1000)); g.drawString(v, fx, fy); fy += 11;
     g.setTextColor(theme::MUTED, theme::BG);
-    std::snprintf(v, sizeof(v), "slot %u  s/l r", slot_); g.drawString(v, fx, fy);
+    std::snprintf(v, sizeof(v), "slot %u  s/l r m", slot_); g.drawString(v, fx, fy);
 
     ui::footer(g);
   }

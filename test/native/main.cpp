@@ -12,7 +12,10 @@ int main() {
   run_duty_tests();
   run_dedup_tests();
   run_nodetable_tests();
+  run_meshoverlay_tests();
   run_crypto_tests();
+  run_aes_tests();
+  run_meshtastic_tests();
   run_payloads_tests();
   run_txqueue_tests();
   run_roster_tests();

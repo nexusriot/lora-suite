@@ -73,6 +73,28 @@ public:
         listY += 10;
       }
     }
+
+    // Foreign Meshtastic nodes (Mesh app import / scan): hollow blue markers,
+    // never in the peer list — they are not nodes we can talk to.
+    int meshShown = 0;
+    if (haveSelf) {
+      for (size_t i = 0; i < ctx.mesh.size(); i++) {
+        const MeshNode& mn = ctx.mesh.at(i);
+        if (!mn.hasPos) continue;
+        double d = haversineMeters(gp->lat(), gp->lon(), mn.lat, mn.lon);
+        double b = bearingDeg(gp->lat(), gp->lon(), mn.lat, mn.lon);
+        double rr = (d > rangeM_ ? rangeM_ : d) / (double)rangeM_ * R;
+        int px = cx + (int)(rr * std::sin(b * M_PI / 180.0));
+        int py = cy - (int)(rr * std::cos(b * M_PI / 180.0));
+        g.drawRect(px - 2, py - 2, 5, 5, theme::LOC);
+        meshShown++;
+      }
+    }
+    if (meshShown) {
+      std::snprintf(s, sizeof(s), "mesh %d", meshShown);
+      g.setTextColor(theme::LOC, theme::BG);
+      ui::textRight(g, ui::SCREEN_W - 4, ui::SCREEN_H - ui::FOOTER_H - 9, s);
+    }
     ui::footer(g);
   }
 

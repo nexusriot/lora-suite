@@ -3,6 +3,7 @@
 #include "../proto/airtime.h"
 #include "../proto/roster.h"
 #include "../proto/rules.h"
+#include "../proto/meshoverlay.h"
 
 namespace ls {
 
@@ -29,6 +30,10 @@ public:
   // Reflex rules (NVS blob).
   bool loadRules(RuleEngine& r);
   void saveRules(const RuleEngine& r);
+
+  // Foreign-node snapshot from SD (/mesh/import.csv, produced by tools/meshpull).
+  // Replaces the overlay's imported entries; live scanned nodes are preserved.
+  bool loadMeshImport(MeshOverlay& mesh, uint32_t now);
 
   // microSD.
   bool sdReady() const { return sd_; }

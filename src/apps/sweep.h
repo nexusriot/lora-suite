@@ -4,6 +4,7 @@
 #include "../shell/app.h"
 #include "../shell/context.h"
 #include "../services/lora_service.h"
+#include "../proto/meshtastic.h"
 #include "../ui/theme.h"
 #include "../ui/widgets.h"
 
@@ -39,6 +40,13 @@ public:
   void onKey(const KeyEvent& k) override {
     if (k.up) stepHz_ += 100000;
     else if (k.down && stepHz_ > 100000) stepHz_ -= 100000;
+    else if (k.ch == 'm') {                        // jump to the EU_868 Meshtastic band
+      uint32_t f = meshtasticPresetEU868().freqHz;  // 869.525 MHz, centred
+      stepHz_ = 25000;
+      base_ = f - (uint32_t)(N / 2) * stepHz_;
+      peak_ = -128;
+      for (int i = 0; i < N; i++) rssi_[i] = -128;
+    }
   }
 
   void update() override {

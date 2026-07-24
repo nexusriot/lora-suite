@@ -12,7 +12,8 @@ namespace ls {
 
 // Streams the Adv's BMI270 motion + battery as TELEMETRY; a paired unit shows
 // the incoming values. Enter toggles transmit. Template for any sensor feed.
-class Telemetry : public App {
+// Named TelemetryApp to avoid clashing with the `Telemetry` payload struct.
+class TelemetryApp : public App {
 public:
   const char* name() const override { return "Telemetry"; }
   const char* callsign() const override { return "TLM"; }

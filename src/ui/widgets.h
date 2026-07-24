@@ -1,7 +1,8 @@
 #pragma once
 #include <cstdint>
 
-class M5Canvas;
+namespace m5gfx { class M5Canvas; }
+using M5Canvas = m5gfx::M5Canvas;
 
 namespace ls {
 

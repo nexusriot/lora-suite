@@ -2,7 +2,8 @@
 #include <cstdint>
 #include "../proto/frame.h"
 
-class M5Canvas; // LovyanGFX sprite from the M5GFX library
+namespace m5gfx { class M5Canvas; }   // LovyanGFX sprite; alias matches M5GFX.h
+using M5Canvas = m5gfx::M5Canvas;
 
 namespace ls {
 

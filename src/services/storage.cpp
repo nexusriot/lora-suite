@@ -83,6 +83,16 @@ void Storage::saveRules(const RuleEngine& r) {
   if (n) s_prefs.putBytes("rules", buf, n);
 }
 
+bool Storage::loadMeshImport(MeshOverlay& mesh, uint32_t now) {
+  if (!sd_) return false;
+  static uint8_t buf[8192];
+  int n = readFile("/mesh/import.csv", buf, sizeof(buf) - 1);
+  if (n < 0) return false;
+  buf[n] = 0;
+  mesh.ingestCsv((const char*)buf, (size_t)n, now);
+  return true;
+}
+
 int Storage::readFile(const char* path, uint8_t* buf, int cap) {
   if (!sd_) return -1;
   SpiBus::Guard g;

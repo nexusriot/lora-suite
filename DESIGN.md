@@ -1,6 +1,6 @@
 # LoRa Suite — Design
 
-A multi-app LoRa toolkit (23 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
+A multi-app LoRa toolkit (26 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
 (SX1262 radio + ATGM336H GPS), at `/home/vlad/workspace/my/lora-suite`. This document
 is the maintainable companion to the rendered [design brief](docs/design-brief.html);
 see [ROADMAP.md](ROADMAP.md) for the feature backlog and [README.md](README.md) for
@@ -12,7 +12,7 @@ the user-facing overview.
   framing, crypto, mesh dedup, duty accounting — live in shared services. Adding
   an app means writing a screen, not a driver.
 - **The portable core is host-tested.** Everything in `src/proto` and `src/crypto`
-  is dependency-free C++ with native unit tests (`test/native/run.sh`, 227 checks),
+  is dependency-free C++ with native unit tests (`test/native/run.sh`, 324 checks),
   so protocol/codec/logic bugs are caught without hardware.
 - **Respect the band.** 868 MHz is duty-limited (~1%); a governor meters every
   transmission and the Marshal scheduler gates all TX.
@@ -20,13 +20,13 @@ the user-facing overview.
 ## Layers
 
 ```
-apps/      23 keyboard-driven screens (each an App subclass)
+apps/      26 keyboard-driven screens (each an App subclass)
 shell/     launcher · screen manager · context (ctx) · net glue · archive FIFO
 ui/        theme (RGB565 palette) · widgets (header/footer/status bar)
 services/  lora (RadioLib SX1262) · gps (TinyGPSPlus) · storage (NVS+SD) · clock
-proto/     frame · airtime · duty · dedup · nodetable · geo · payloads ·
-           qos · txqueue · roster · solar · ledger · rules        (portable, tested)
-crypto/    chacha20 · channel                                     (portable, tested)
+proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
+           roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite  (portable, tested)
+crypto/    chacha20 · channel · aes                               (portable, tested)
 hal/       pins.h · spi_bus (shared radio+SD mutex)
 ```
 
@@ -39,7 +39,8 @@ Countdown, Reflex, Archive-flush all use it), `consumesText` (gates global keys
 during text entry), and `drawIcon` (a 20×20 vector glyph for the launcher).
 
 ### Shared state — `ctx` (`shell/context.h`)
-One global `Context`: `NodeTable`, `Roster`, `ArchiveLog`, `RuleEngine`, active
+One global `Context`: `NodeTable`, `MeshOverlay` (foreign Meshtastic nodes),
+`Roster`, `ArchiveLog`, `RuleEngine`, active
 `Channel`/`RadioCfg`, identity, power/presence, unread counter, a cross-app nav
 intent (`navRequest`/`pendingPeer`), and countdown state. Apps read/write it;
 services are wired in at boot.
@@ -87,11 +88,28 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD | CRC16(2)
 - **Archive** — text captured on the hot paths into a RAM FIFO (`ctx.archive`),
   drained to `/archive.csv` from `background()` (never on the RX path); a viewer
   reads the file tail.
+- **Meshtastic interop** — three ways to observe the foreign Meshtastic world on
+  the shared 868 band, all feeding a `MeshOverlay` kept apart from `NodeTable`
+  (situational-awareness only — never relayed/ACKed/addressed; keyed by 32-bit
+  node numbers; source-tagged `SRC_IMPORT`/`SRC_SCAN`):
+  - **Import (A)** — `tools/meshpull` trims the ~3.7 MB meshmap.net feed to an SD
+    CSV; the **Mesh** app parses it (comma-tolerant long names, `# generated`
+    time, rows dim by last-heard) and **Radar** plots distinct markers.
+  - **Scan (B)** — **MeshScan** retunes the SX1262 to the EU_868 preset, sets
+    `LoRaService` receive-only (so no app airs our frames on their channel), and
+    decodes raw packets via `proto/meshtastic` (16-byte header + AES-128-CTR +
+    `protobuf_lite` → Position/NodeInfo) into `SRC_SCAN` entries. A raw-RX tap
+    (`onRawReceive`) delivers the bytes; `crypto/aes` does the decrypt.
+  - **Uplink (C2)** — **Gateway** re-encodes every heard frame and streams it out
+    USB-CDC as JSON from the RX chokepoint (background, any app open);
+    `tools/lorakit` (a byte-compatible Go codec + `dissect` CLI) consumes it
+    toward a self-hosted fleet map.
 
 ## Constraints & conventions
 
 - **No PSRAM (~512 KB RAM):** fixed-capacity tables (NodeTable 32, Roster 48,
-  TxQueue 12), no heap in the hot paths. `const` icon/data tables live in flash.
+  TxQueue 12, MeshOverlay 96), no heap in the hot paths. `const` icon/data tables
+  live in flash.
 - **Shared SPI bus:** radio + microSD share SCK/MOSI/MISO; all transfers take
   `SpiBus::Guard` (recursive mutex). SD-heavy apps buffer in RAM and flush from
   `background()` so writes never stall the radio.
@@ -103,9 +121,12 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD | CRC16(2)
 ## Testing & build
 
 - Host: `bash test/native/run.sh` — frame codec, airtime, duty (+next-TX),
-  Marshal queue, dedup, node table + geo, roster, solar, crypto, ledger, rules,
-  and all payload codecs. Pure C++, no board required.
-- Device: `pio run -e cardputer-adv -t upload` (RadioLib 6.x, TinyGPSPlus,
-  M5Cardputer). The device layer isn't host-compilable; it's verified by review +
-  the tested cores. Adjust the board id / TCXO / GPS RX-TX per your module (see
-  README caveats).
+  Marshal queue, dedup, node table + geo, roster, solar, ChaCha20/channel crypto,
+  **AES-128 (FIPS-197) + CTR**, the **Meshtastic frame decode** (header + AES-CTR
+  + protobuf → Position/NodeInfo) + EU_868 preset, the Meshtastic overlay + CSV
+  parser, ledger, rules, and all payload codecs. Pure C++, no board required.
+  The Go host tools `tools/meshpull` and `tools/lorakit` have their own `go test`s.
+- Device: `pio run -e cardputer-adv` builds the full firmware clean (RadioLib 6.x,
+  TinyGPSPlus, M5Cardputer; ~18% RAM / ~20% flash on the StampS3). `-t upload` to
+  flash + `pio device monitor`. On-air behaviour still needs the hardware; adjust
+  the board id / TCXO / GPS RX-TX per your module (see README caveats).
