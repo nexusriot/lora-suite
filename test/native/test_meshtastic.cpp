@@ -140,6 +140,14 @@ void run_meshtastic_tests() {
     CHECK(c.syncWord == 0x2b);
   }
 
+  // --- scanner presets: LongFast/MediumFast/ShortFast differ only in SF ---
+  {
+    CHECK(meshtasticPreset(0).sf == 11 && std::strcmp(meshtasticPresetName(0), "LongFast") == 0);
+    CHECK(meshtasticPreset(1).sf == 9  && std::strcmp(meshtasticPresetName(1), "MediumFast") == 0);
+    CHECK(meshtasticPreset(2).sf == 7  && std::strcmp(meshtasticPresetName(2), "ShortFast") == 0);
+    CHECK(meshtasticPreset(0).freqHz == 869525000 && meshtasticPreset(2).bwHz == 250000);
+  }
+
   // --- TX: encode a text frame, then decode it back (round-trip) ---
   {
     uint8_t frame[128];

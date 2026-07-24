@@ -26,9 +26,17 @@ enum MeshPort : uint8_t {
 extern const uint8_t MESH_DEFAULT_KEY[16];
 
 // EU_868 / MEDIUM_FAST modem preset — the single default channel at 869.525 MHz.
-// This is what the scanner tunes to and what Console applies with 'm'.
+// This is what Console applies with 'm' and what MeshTX transmits on.
 // VERIFY the exact SF/BW/CR/sync against the Meshtastic firmware on bring-up.
 RadioCfg meshtasticPresetEU868();
+
+// Scanner presets (same 869.525 MHz / BW250 / CR4:5 / sync 0x2b in EU_868, differing
+// only in spreading factor). idx 0 = LongFast (SF11, the Meshtastic global default),
+// 1 = MediumFast (SF9), 2 = ShortFast (SF7). MeshScan cycles these to catch nodes on
+// any preset. VERIFY the SF-per-preset table against the firmware on bring-up.
+enum { MESH_PRESET_COUNT = 3 };
+RadioCfg meshtasticPreset(int idx);
+const char* meshtasticPresetName(int idx);
 
 struct MeshPacket {
   uint32_t from = 0;

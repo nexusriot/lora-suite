@@ -1,7 +1,7 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **28** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **30** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
@@ -43,11 +43,13 @@ can never interleave with a radio transaction. See `src/hal/`.
 | Callsign | App | What it does |
 |---|---|---|
 | CR | Courier | Addressed + broadcast text chat, ACKs, optional encrypted channel; `@name msg` sends by contact |
+| CHAT | Chat | Simple broadcast LoRa messenger (Cardputer-demo style) — one shared scrolling feed, no addressing |
 | HIST | Archive | Persistent message history on SD (survives reboot); tail viewer with scroll + `f` substring filter |
 | UNDO | Recall | Cancel a still-queued outbound frame before it airs (within the duty hold-window) |
 | CB | Contacts | Durable name↔address roster — aliases, block, favourite, import heard nodes (NVS-persisted) |
 | FLT | Fleet | Squad-vitals dashboard (battery/presence/RSSI/age, worst-first) + set your own Presence; Enter → message a node |
 | RLY | Relay | Mesh control panel + node table (forwarding runs in the background for every screen) |
+| GPS | GPS | Own GPS status — fix, lat/lon, altitude, speed/course, satellites, HDOP, UTC |
 | BCN | Beacon | Periodic GPS position, interval auto-throttled to the duty budget |
 | RDR | Radar | Polar plot of nodes by bearing + distance from your fix (foreign Meshtastic nodes shown as hollow markers) |
 | MESH | Mesh | Foreign Meshtastic nodes from a meshmap.net snapshot (SD) — read-only situational awareness, nearest-first, `r` reloads |
@@ -55,7 +57,7 @@ can never interleave with a radio transaction. See `src/hal/`.
 | TRK | Breadcrumb | Logs track + heard nodes to microSD (CSV), GPS-timestamped |
 | SOS | Mayday | Distress + dead-man switch — confirmed panic, IMU-stillness auto-trigger, homing view for received distress |
 | SWP | Sweep | RSSI scan across a channel plan, waterfall bars; `m` jumps to the EU_868 Meshtastic band |
-| SCAN | MeshScan | Over-the-air Meshtastic receiver — retunes, decrypts the public channel, decodes position/name/telemetry/text into Mesh (Direction B) |
+| SCAN | MeshScan | Over-the-air Meshtastic receiver — sweeps the LongFast/MediumFast/ShortFast presets, decrypts the public channel, decodes position/name/telemetry/text into Mesh (Direction B) |
 | MTX | MeshTX | Send a text INTO the Meshtastic public channel — two-way interop (Direction B, TX) |
 | MON | Monitor | Promiscuous frame monitor (type / addr / RSSI / SNR) |
 | RNG | Ranger | Ping/echo link test — RSSI, SNR, RTT, loss, distance |
@@ -171,7 +173,7 @@ src/
   services/  lora · gps · storage · clock                                  (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      28 apps                                                       (device)
+  apps/      30 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/    host unit tests (g++)
@@ -201,7 +203,7 @@ Notes:
 bash test/native/run.sh
 ```
 
-Builds and runs the portable-core suite (341 checks): frame codec (round-trip,
+Builds and runs the portable-core suite (345 checks): frame codec (round-trip,
 CRC rejection, bounds), LoRa airtime math, the duty-cycle governor + next-TX
 math, the Marshal priority queue (class-based admission + age-promotion), mesh
 dedup, node table + geo, the contact roster (+ serialization), the solar

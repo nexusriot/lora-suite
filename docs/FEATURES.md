@@ -5,7 +5,7 @@ explanatory companion to the terse app table in [../README.md](../README.md) and
 the architecture in [../DESIGN.md](../DESIGN.md).
 
 The device is an **M5Stack Cardputer-Adv** with the **Cap LoRa868** module
-(SX1262 radio + GPS). 28 keyboard-driven apps share one radio, one 13-byte wire
+(SX1262 radio + GPS). 30 keyboard-driven apps share one radio, one 13-byte wire
 protocol, one duty-cycle budget, and the module's GPS.
 
 **Keys everywhere:** the `;` `.` `,` `/` cluster is ↑ ↓ ← → · **Enter** confirms /
@@ -19,6 +19,7 @@ while typing). Each app shows its own extra keys.
 | App | For what | How |
 |---|---|---|
 | **Courier** (CR) | Your main text chat — talk to one node or the whole mesh, with delivery ACKs and an optional encrypted channel. | Type a message + Enter to broadcast; `@name msg` sends to a saved contact. |
+| **Chat** (CHAT) | A dead-simple **broadcast** messenger (in the spirit of the Cardputer demo's LoRa Chat) — everyone on the channel shares one scrolling feed, no addressing or ACKs. | Type + Enter broadcasts to all; incoming text scrolls in with the sender. |
 | **Archive** (HIST) | A durable log of everything sent/received, so history survives a reboot (RAM chat scrolls away). | Opens the on-SD history; scroll with ↑↓, `f` filters by substring. |
 | **Recall** (UNDO) | "Unsend" — pull back a message that's still queued (waiting on the duty budget) before it actually airs. | Lists your queued frames; Enter cancels the selected one. |
 | **Contacts** (CB) | A durable name↔address book so you address people by name instead of hex, and can block/favourite nodes. | Add aliases, block, favourite, or import heard nodes; persists to flash. |
@@ -35,6 +36,7 @@ while typing). Each app shows its own extra keys.
 
 | App | For what | How |
 |---|---|---|
+| **GPS** (GPS) | See your own GPS state — fix, latitude/longitude, altitude, speed/course, satellite count, HDOP and UTC time (the module's GPS is also the fleet's clock). | Read-only status. |
 | **Beacon** (BCN) | Periodically broadcast your GPS position so the mesh can see where you are; interval auto-throttles to stay legal. | Toggle on; it self-paces against the duty budget. |
 | **Radar** (RDR) | A live polar plot of who's around you, by bearing + distance from your fix. Foreign Meshtastic nodes show as hollow blue markers. | ↑↓ change the display range. |
 | **Pathfinder** (PF) | Navigate to a point — share/capture a waypoint and home in on it with a bearing arrow, range and closing speed. | Capture/select a waypoint; follow the arrow. |
@@ -50,7 +52,7 @@ local Meshtastic world three ways. See the dedicated section in
 | App | For what | How |
 |---|---|---|
 | **Mesh** (MESH) | See nearby **Meshtastic** nodes (imported from meshmap.net, and/or heard by MeshScan) as read-only situational awareness — you can't message them, but you can see where they are and how fresh they are. | `r` reloads the SD import; ↑↓ scroll; **Enter** opens a full node card (name, hardware, battery/voltage, position, last-heard). Rows dim as they age. |
-| **MeshScan** (SCAN) | Passively **receive** the local Meshtastic mesh over the air — decrypts the public channel and drops decoded **positions, names, device telemetry (battery/voltage) and text messages** into Mesh with live signal strength. | Just open it; it retunes the radio and listens (Enter jumps to the Mesh list, `c` clears counters). **One radio: while open you can't hear your own mesh.** |
+| **MeshScan** (SCAN) | Passively **receive** the local Meshtastic mesh over the air — decrypts the public channel and drops decoded **positions, names, device telemetry (battery/voltage) and text messages** into Mesh with live signal strength. **Sweeps the LongFast / MediumFast / ShortFast presets** so it catches nodes whatever preset they use (LongFast is the global default). | Open it and it auto-cycles presets every ~15 s (`n` = next now); Enter jumps to the Mesh list, `c` clears counters. **One radio: while open you can't hear your own mesh.** |
 | **MeshTX** (MTX) | **Send** into the local Meshtastic public channel — broadcast a short text that real Meshtastic nodes can read. Makes the interop two-way. | Type a message + Enter; it momentarily retunes to the Meshtastic preset to transmit, then restores. Airs on a shared public channel — be a good neighbour. |
 | **Gateway** (GW) | Uplink **your own** mesh to a computer — streams every frame you hear out USB serial as JSON, to feed the `dissect` tool or a self-hosted map of your fleet. | Enter toggles uplink on/off; runs in the background so you can use other apps. |
 

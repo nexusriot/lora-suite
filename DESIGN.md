@@ -1,6 +1,6 @@
 # LoRa Suite — Design
 
-A multi-app LoRa toolkit (28 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
+A multi-app LoRa toolkit (30 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
 (SX1262 radio + ATGM336H GPS), at `/home/vlad/workspace/my/lora-suite`. This document
 is the maintainable companion to the rendered [design brief](docs/design-brief.html);
 see [ROADMAP.md](ROADMAP.md) for the feature backlog and [README.md](README.md) for
@@ -12,7 +12,7 @@ the user-facing overview.
   framing, crypto, mesh dedup, duty accounting — live in shared services. Adding
   an app means writing a screen, not a driver.
 - **The portable core is host-tested.** Everything in `src/proto` and `src/crypto`
-  is dependency-free C++ with native unit tests (`test/native/run.sh`, 341 checks),
+  is dependency-free C++ with native unit tests (`test/native/run.sh`, 345 checks),
   so protocol/codec/logic bugs are caught without hardware.
 - **Respect the band.** 868 MHz is duty-limited (~1%); a governor meters every
   transmission and the Marshal scheduler gates all TX.
@@ -20,7 +20,7 @@ the user-facing overview.
 ## Layers
 
 ```
-apps/      28 keyboard-driven screens (each an App subclass)
+apps/      30 keyboard-driven screens (each an App subclass)
 shell/     launcher · screen manager · context (ctx) · net glue · archive FIFO
 ui/        theme (RGB565 palette) · widgets (header/footer/status bar)
 services/  lora (RadioLib SX1262) · gps (TinyGPSPlus) · storage (NVS+SD) · clock
@@ -95,11 +95,12 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD | CRC16(2)
   - **Import (A)** — `tools/meshpull` trims the ~3.7 MB meshmap.net feed to an SD
     CSV; the **Mesh** app parses it (comma-tolerant long names, `# generated`
     time, rows dim by last-heard) and **Radar** plots distinct markers.
-  - **Scan (B, RX)** — **MeshScan** retunes the SX1262 to the EU_868 preset, sets
-    `LoRaService` receive-only (so no app airs our frames on their channel), and
-    decodes raw packets via `proto/meshtastic` (16-byte header + AES-128-CTR +
-    `protobuf_lite` → Text/Position/NodeInfo/Telemetry) into `SRC_SCAN` entries. A
-    raw-RX tap (`onRawReceive`) delivers the bytes; `crypto/aes` does the decrypt.
+  - **Scan (B, RX)** — **MeshScan** retunes the SX1262 and sweeps the LongFast/
+    MediumFast/ShortFast presets (SF11/9/7 at 869.525 MHz), sets `LoRaService`
+    receive-only (so no app airs our frames on their channel), and decodes raw
+    packets via `proto/meshtastic` (16-byte header + AES-128-CTR + `protobuf_lite`
+    → Text/Position/NodeInfo/Telemetry) into `SRC_SCAN` entries. A raw-RX tap
+    (`onRawReceive`) delivers the bytes; `crypto/aes` does the decrypt.
   - **Scan (B, TX)** — **MeshTX** encodes a text (protobuf writer + AES-CTR +
     channel hash), retunes to the preset, and `LoRaService::transmitRaw`s it onto
     the public channel — two-way interop.

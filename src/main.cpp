@@ -16,12 +16,14 @@
 #include "ui/theme.h"
 
 #include "apps/courier.h"
+#include "apps/chat.h"
 #include "apps/archive.h"
 #include "apps/recall.h"
 #include "apps/contacts.h"
 #include "apps/fleet.h"
 #include "apps/relay.h"
 #include "apps/beacon.h"
+#include "apps/gps.h"
 #include "apps/radar.h"
 #include "apps/mesh.h"
 #include "apps/pathfinder.h"
@@ -52,12 +54,14 @@ static Storage     storage;
 static Clock       clk;
 
 static Courier    courier;
+static Chat       chat;
 static Archive    archiveApp;
 static Recall     recallApp;
 static Contacts   contacts;
 static Fleet      fleet;
 static Relay      relay;
 static Beacon     beacon;
+static Gps        gpsApp;
 static Radar      radar;
 static Mesh       meshApp;
 static Pathfinder pathfinder;
@@ -81,7 +85,7 @@ static TelemetryApp telemetry;
 static Dropbox    dropbox;
 
 static App* apps[] = {
-    &courier, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &radar,
+    &courier, &chat, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &gpsApp, &radar,
     &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &monitor, &ranger, &chronos, &countdownApp,
     &console, &gateway, &probe, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
 static const int APP_COUNT = sizeof(apps) / sizeof(apps[0]);

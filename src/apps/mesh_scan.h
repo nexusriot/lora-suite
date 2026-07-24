@@ -36,9 +36,15 @@ public:
     if (ctx.lora) {
       saved_ = ctx.cfg;                               // remember our own profile
       ctx.lora->setRxOnly(true);                       // receive-only: never TX here
-      ctx.lora->applyConfig(meshtasticPresetEU868());
-      ctx.lora->startReceive();
       ctx.lora->onRawReceive(&MeshScan::rawTrampoline);
+      applyPreset();                                   // tune to the current preset
+    }
+  }
+
+  void update() override {   // auto-cycle presets so we sweep LongFast/MediumFast/ShortFast
+    if (ctx.lora && millis() - lastCycle_ >= CYCLE_MS) {
+      preset_ = (preset_ + 1) % MESH_PRESET_COUNT;
+      applyPreset();
     }
   }
 
@@ -54,6 +60,7 @@ public:
 
   void onKey(const KeyEvent& k) override {
     if (k.ch == 'c') { heard_ = decoded_ = texts_ = 0; lastText_[0] = 0; }
+    else if (k.ch == 'n') { preset_ = (preset_ + 1) % MESH_PRESET_COUNT; applyPreset(); }  // next preset now
     else if (k.enter) ctx.navRequest = "MESH";         // jump to the scanned-node list
   }
 
@@ -65,7 +72,8 @@ public:
     char s[40];
     int y = ui::BODY_Y + 2;
     g.setTextColor(theme::RF, theme::BG);
-    std::snprintf(s, sizeof(s), "RX-ONLY  %.3f MHz", meshtasticPresetEU868().freqHz / 1e6);
+    std::snprintf(s, sizeof(s), "RX %s SF%d  %.3f", meshtasticPresetName(preset_),
+                  meshtasticPreset(preset_).sf, meshtasticPreset(preset_).freqHz / 1e6);
     g.drawString(s, 6, y); y += 13;
 
     g.setTextColor(theme::TEXT, theme::BG);
@@ -100,10 +108,21 @@ public:
 
 private:
   static inline MeshScan* active_ = nullptr;
+  static const uint32_t CYCLE_MS = 15000;   // auto-advance the scan preset every 15 s
   RadioCfg saved_;
   uint32_t heard_ = 0, decoded_ = 0, lastMs_ = 0, texts_ = 0;
   int16_t lastRssi_ = 0;
   char lastText_[64] = {0};
+  int preset_ = 0;                          // 0=LongFast (Meshtastic default), 1=MediumFast, 2=ShortFast
+  uint32_t lastCycle_ = 0;
+
+  void applyPreset() {
+    if (ctx.lora) {
+      ctx.lora->applyConfig(meshtasticPreset(preset_));
+      ctx.lora->startReceive();
+    }
+    lastCycle_ = millis();
+  }
 
   static void rawTrampoline(const uint8_t* buf, size_t n, const RxMeta& m) {
     if (active_) active_->handleRaw(buf, n, m);

@@ -24,6 +24,18 @@ RadioCfg meshtasticPresetEU868() {
   return c;
 }
 
+RadioCfg meshtasticPreset(int idx) {
+  static const uint8_t SF[MESH_PRESET_COUNT] = {11, 9, 7};   // LongFast / MediumFast / ShortFast
+  RadioCfg c = meshtasticPresetEU868();
+  c.sf = SF[(idx < 0 || idx >= MESH_PRESET_COUNT) ? 1 : idx];
+  return c;
+}
+
+const char* meshtasticPresetName(int idx) {
+  static const char* NAMES[MESH_PRESET_COUNT] = {"LongFast", "MediumFast", "ShortFast"};
+  return (idx >= 0 && idx < MESH_PRESET_COUNT) ? NAMES[idx] : "?";
+}
+
 static uint32_t u32le(const uint8_t* p) {
   return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
