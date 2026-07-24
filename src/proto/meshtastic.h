@@ -73,8 +73,9 @@ void meshtastic_nonce(uint32_t packetId, uint32_t fromNode, uint8_t nonce[16]);
 // is one we understand (Text/Position/NodeInfo/Telemetry) — a wrong key fails closed.
 bool meshtastic_decode(const uint8_t* buf, size_t n, const uint8_t key[16], MeshPacket& out);
 
-// Channel hash for the default public channel (xorHash(name) ^ xorHash(key), with
-// name = the MEDIUM_FAST preset name). VERIFY against the firmware on bring-up.
+// Channel hash for a preset's default channel: xorHash(presetName) ^ xorHash(key).
+// meshtasticDefaultChannelHash() is the MediumFast one. VERIFY on bring-up.
+uint8_t meshtasticChannelHash(int presetIdx);
 uint8_t meshtasticDefaultChannelHash();
 
 // Build a complete Meshtastic frame that broadcasts `text` on the public channel
@@ -83,5 +84,11 @@ uint8_t meshtasticDefaultChannelHash();
 size_t meshtastic_encode_text(uint32_t from, uint32_t packetId, uint8_t channelHash,
                               const char* text, const uint8_t key[16],
                               uint8_t* out, size_t cap);
+
+// Build a Meshtastic frame that broadcasts a Position (lat/lon in degrees*1e7,
+// altitude in metres). Returns the frame length, or 0 on error.
+size_t meshtastic_encode_position(uint32_t from, uint32_t packetId, uint8_t channelHash,
+                                  int32_t latI, int32_t lonI, int32_t altM,
+                                  const uint8_t key[16], uint8_t* out, size_t cap);
 
 } // namespace ls

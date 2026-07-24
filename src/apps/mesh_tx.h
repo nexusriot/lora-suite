@@ -5,6 +5,7 @@
 #include "../shell/app.h"
 #include "../shell/context.h"
 #include "../services/lora_service.h"
+#include "../services/gps_service.h"
 #include "../proto/meshtastic.h"
 #include "../ui/theme.h"
 #include "../ui/widgets.h"
@@ -32,6 +33,7 @@ public:
 
   void onKey(const KeyEvent& k) override {
     if (k.enter) { send(); return; }
+    if (k.tab) { sendPosition(); return; }
     if (k.del) { if (len_ > 0) buf_[--len_] = 0; return; }
     if (k.ch >= 0x20 && k.ch < 0x7f && len_ < (int)sizeof(buf_) - 1) {
       buf_[len_++] = k.ch;
@@ -63,7 +65,7 @@ public:
     }
     y += 14;
     g.setTextColor(theme::MUTED, theme::BG);
-    g.drawString("type + Enter to send", 6, y);
+    g.drawString("Enter=text  Tab=GPS pos", 6, y);
     ui::footer(g);
   }
 
@@ -89,6 +91,29 @@ private:
     ctx.lora->startReceive();
 
     if (ok) { std::strncpy(status_, "sent", sizeof(status_)); sent_++; len_ = 0; buf_[0] = 0; }
+    else std::strncpy(status_, "TX failed", sizeof(status_));
+  }
+
+  void sendPosition() {   // Tab: broadcast our GPS as a Meshtastic Position
+    if (!ctx.lora || !ctx.gps || !ctx.gps->hasFix()) {
+      std::strncpy(status_, "no GPS fix", sizeof(status_));
+      return;
+    }
+    int32_t latI = (int32_t)(ctx.gps->lat() * 1e7);
+    int32_t lonI = (int32_t)(ctx.gps->lon() * 1e7);
+    uint8_t frame[128];
+    uint32_t pid = ((uint32_t)millis() << 8) ^ (++seq_);
+    uint32_t from = 0x4C530000u | ctx.myAddr;
+    size_t n = meshtastic_encode_position(from, pid, meshtasticDefaultChannelHash(),
+                                          latI, lonI, (int32_t)ctx.gps->altM(),
+                                          MESH_DEFAULT_KEY, frame, sizeof(frame));
+    if (!n) { std::strncpy(status_, "encode fail", sizeof(status_)); return; }
+    RadioCfg saved = ctx.cfg;
+    ctx.lora->applyConfig(meshtasticPresetEU868());
+    bool ok = ctx.lora->transmitRaw(frame, n);
+    ctx.lora->applyConfig(saved);
+    ctx.lora->startReceive();
+    if (ok) { std::strncpy(status_, "pos sent", sizeof(status_)); sent_++; }
     else std::strncpy(status_, "TX failed", sizeof(status_));
   }
 };

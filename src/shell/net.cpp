@@ -5,6 +5,7 @@
 #include <esp_system.h>
 #include "../services/lora_service.h"
 #include "../services/gps_service.h"
+#include "../services/audio.h"
 
 namespace ls {
 
@@ -176,7 +177,7 @@ static const char* const CANNED[] = {"ROGER", "OK", "STANDBY", "ON MY WAY", "NEG
 void runRuleAction(const RuleAction& a) {
   switch (a.type) {
     case AC_BEEP:
-      M5.Speaker.tone(1800, 200);
+      audio::tone(1800, 200);
       break;
     case AC_SEND_TEXT: {
       uint8_t i = a.param % (sizeof(CANNED) / sizeof(CANNED[0]));

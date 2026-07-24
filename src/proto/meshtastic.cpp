@@ -151,11 +151,13 @@ static uint8_t xorHash(const uint8_t* p, size_t n) {
   return h;
 }
 
-uint8_t meshtasticDefaultChannelHash() {
+uint8_t meshtasticChannelHash(int presetIdx) {
   // The default primary channel's empty name resolves to the modem-preset name.
-  static const char NAME[] = "MediumFast";
-  return (uint8_t)(xorHash((const uint8_t*)NAME, sizeof(NAME) - 1) ^ xorHash(MESH_DEFAULT_KEY, 16));
+  const char* name = meshtasticPresetName(presetIdx);
+  return (uint8_t)(xorHash((const uint8_t*)name, std::strlen(name)) ^ xorHash(MESH_DEFAULT_KEY, 16));
 }
+
+uint8_t meshtasticDefaultChannelHash() { return meshtasticChannelHash(1); }   // MediumFast
 
 size_t meshtastic_encode_text(uint32_t from, uint32_t packetId, uint8_t channelHash,
                               const char* text, const uint8_t key[16],
@@ -184,6 +186,40 @@ size_t meshtastic_encode_text(uint32_t from, uint32_t packetId, uint8_t channelH
   out[13] = channelHash;
   out[14] = 0;                 // next_hop
   out[15] = 0;                 // relay_node
+  std::memcpy(out + MESH_HEADER_LEN, data, w.len);
+  return total;
+}
+
+size_t meshtastic_encode_position(uint32_t from, uint32_t packetId, uint8_t channelHash,
+                                  int32_t latI, int32_t lonI, int32_t altM,
+                                  const uint8_t key[16], uint8_t* out, size_t cap) {
+  if (!out) return 0;
+  uint8_t pos[48];             // Position protobuf
+  PbWriter p(pos, sizeof(pos));
+  if (!p.putFixed32Field(1, (uint32_t)latI)) return 0;   // latitude_i (sfixed32)
+  if (!p.putFixed32Field(2, (uint32_t)lonI)) return 0;   // longitude_i (sfixed32)
+  if (!p.putVarintField(3, (uint64_t)(int64_t)altM)) return 0;  // altitude (int32)
+
+  uint8_t data[80];            // Data protobuf
+  PbWriter w(data, sizeof(data));
+  if (!w.putVarintField(1, MESH_PORT_POSITION)) return 0;
+  if (!w.putBytesField(2, pos, p.len)) return 0;
+
+  uint8_t nonce[16];
+  meshtastic_nonce(packetId, from, nonce);
+  aes128_ctr_xor(key, nonce, data, w.len);
+
+  size_t total = MESH_HEADER_LEN + w.len;
+  if (cap < total) return 0;
+  out[0] = 0xFF; out[1] = 0xFF; out[2] = 0xFF; out[3] = 0xFF;
+  out[4] = (uint8_t)from; out[5] = (uint8_t)(from >> 8);
+  out[6] = (uint8_t)(from >> 16); out[7] = (uint8_t)(from >> 24);
+  out[8] = (uint8_t)packetId; out[9] = (uint8_t)(packetId >> 8);
+  out[10] = (uint8_t)(packetId >> 16); out[11] = (uint8_t)(packetId >> 24);
+  out[12] = 0x63;
+  out[13] = channelHash;
+  out[14] = 0;
+  out[15] = 0;
   std::memcpy(out + MESH_HEADER_LEN, data, w.len);
   return total;
 }

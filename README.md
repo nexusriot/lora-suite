@@ -1,7 +1,7 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **30** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **32** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
@@ -58,7 +58,8 @@ can never interleave with a radio transaction. See `src/hal/`.
 | SOS | Mayday | Distress + dead-man switch — confirmed panic, IMU-stillness auto-trigger, homing view for received distress |
 | SWP | Sweep | RSSI scan across a channel plan, waterfall bars; `m` jumps to the EU_868 Meshtastic band |
 | SCAN | MeshScan | Over-the-air Meshtastic receiver — sweeps the LongFast/MediumFast/ShortFast presets, decrypts the public channel, decodes position/name/telemetry/text into Mesh (Direction B) |
-| MTX | MeshTX | Send a text INTO the Meshtastic public channel — two-way interop (Direction B, TX) |
+| MTX | MeshTX | Send text (Enter) or your GPS position (Tab) INTO the Meshtastic public channel — two-way interop |
+| MCHT | MeshChat | Two-way conversation on the Meshtastic public channel — RX + TX text in one feed; Tab cycles preset |
 | MON | Monitor | Promiscuous frame monitor (type / addr / RSSI / SNR) |
 | RNG | Ranger | Ping/echo link test — RSSI, SNR, RTT, loss, distance |
 | TIME | Chronos | Mesh time-sync (GPS→TIMESYNC) for the RTC-less fleet + daylight-length almanac |
@@ -66,6 +67,7 @@ can never interleave with a radio transaction. See `src/hal/`.
 | CFG | Console | Radio profiles + live airtime / duty / link-budget calculator; `m` applies the Meshtastic preset |
 | GW | Gateway | Uplink heard frames over USB serial as JSON (feeds `tools/lorakit` dissect / a map of your fleet) |
 | PRB | Probe | Hardware self-test — I2C scan + radio/GPS/SD/keyboard/board status on one screen |
+| WIFI | WiFi | Scan 2.4 GHz WiFi APs (SSID / RSSI / channel / secured) — uses the otherwise-unused WiFi radio |
 | LOG | Ledger | Per-type airtime audit against the 1% duty budget + a daily SD summary |
 | RULE | Reflex | On-device IFTTT: event→action rules (RX-type / alert / low-battery / periodic) |
 | PWR | Reactor | Battery-aware power state machine (CPU/LCD degrade with hysteresis) + Survival low-power beacon |
@@ -173,7 +175,7 @@ src/
   services/  lora · gps · storage · clock                                  (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      30 apps                                                       (device)
+  apps/      32 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/    host unit tests (g++)

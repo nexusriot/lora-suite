@@ -195,4 +195,26 @@ void run_meshtastic_tests() {
     CHECK(mp.battery == 90);
     CHECK(mp.voltCv == 385);
   }
+
+  // --- channel hash differs per preset (name-derived); default == MediumFast ---
+  {
+    CHECK(meshtasticChannelHash(0) != meshtasticChannelHash(1));  // LongFast vs MediumFast
+    CHECK(meshtasticDefaultChannelHash() == meshtasticChannelHash(1));
+  }
+
+  // --- TX: encode a Position frame, decode it back ---
+  {
+    uint8_t frame[128];
+    uint8_t hash = meshtasticChannelHash(0);
+    size_t nn = meshtastic_encode_position(0xAABBCCDD, 0x55, hash,
+                                           364249088, 445150000, 991,
+                                           MESH_DEFAULT_KEY, frame, sizeof(frame));
+    CHECK(nn > MESH_HEADER_LEN);
+    MeshPacket mp;
+    CHECK(meshtastic_decode(frame, nn, MESH_DEFAULT_KEY, mp));
+    CHECK(mp.portnum == MESH_PORT_POSITION && mp.hasPos && mp.channelHash == hash);
+    CHECK_NEAR(mp.lat, 36.4249088, 1e-6);
+    CHECK_NEAR(mp.lon, 44.5150000, 1e-6);
+    CHECK(mp.altitude == 991);
+  }
 }

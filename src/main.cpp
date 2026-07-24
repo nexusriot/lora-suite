@@ -12,6 +12,7 @@
 #include "services/gps_service.h"
 #include "services/storage.h"
 #include "services/clock.h"
+#include "services/audio.h"
 #include "hal/spi_bus.h"
 #include "ui/theme.h"
 
@@ -32,6 +33,7 @@
 #include "apps/sweep.h"
 #include "apps/mesh_scan.h"
 #include "apps/mesh_tx.h"
+#include "apps/mesh_chat.h"
 #include "apps/monitor.h"
 #include "apps/ranger.h"
 #include "apps/chronos.h"
@@ -39,6 +41,7 @@
 #include "apps/console.h"
 #include "apps/gateway.h"
 #include "apps/probe.h"
+#include "apps/wifi_scan.h"
 #include "apps/ledger.h"
 #include "apps/reflex.h"
 #include "apps/reactor.h"
@@ -70,6 +73,7 @@ static Mayday     mayday;
 static Sweep      sweep;
 static MeshScan   meshScan;
 static MeshTX     meshTx;
+static MeshChat   meshChat;
 static Monitor    monitor;
 static Ranger     ranger;
 static Chronos     chronos;
@@ -77,6 +81,7 @@ static CountdownApp countdownApp;
 static Console     console;
 static Gateway     gateway;
 static Probe       probe;
+static WifiScan    wifiScan;
 static Ledger      ledgerApp;
 static Reflex      reflexApp;
 static Reactor     reactor;
@@ -86,8 +91,8 @@ static Dropbox    dropbox;
 
 static App* apps[] = {
     &courier, &chat, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &gpsApp, &radar,
-    &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &monitor, &ranger, &chronos, &countdownApp,
-    &console, &gateway, &probe, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
+    &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &meshChat, &monitor, &ranger, &chronos, &countdownApp,
+    &console, &gateway, &probe, &wifiScan, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
 static const int APP_COUNT = sizeof(apps) / sizeof(apps[0]);
 
 static ScreenManager sm;
@@ -302,6 +307,8 @@ void setup() {
   // wrong and the TCA8418 keyboard never comes up. Pin the fallback to the Adv.
   m5cfg.fallback_board = m5::board_t::board_M5CardputerADV;
   M5Cardputer.begin(m5cfg, true);
+  audio::init();
+  audio::beep();                 // boot chirp — proves the speaker is alive
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setTextSize(1);
   canvas.setColorDepth(16);

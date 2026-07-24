@@ -5,7 +5,7 @@ explanatory companion to the terse app table in [../README.md](../README.md) and
 the architecture in [../DESIGN.md](../DESIGN.md).
 
 The device is an **M5Stack Cardputer-Adv** with the **Cap LoRa868** module
-(SX1262 radio + GPS). 30 keyboard-driven apps share one radio, one 13-byte wire
+(SX1262 radio + GPS). 32 keyboard-driven apps share one radio, one 13-byte wire
 protocol, one duty-cycle budget, and the module's GPS.
 
 **Keys everywhere:** the `;` `.` `,` `/` cluster is ↑ ↓ ← → · **Enter** confirms /
@@ -53,7 +53,8 @@ local Meshtastic world three ways. See the dedicated section in
 |---|---|---|
 | **Mesh** (MESH) | See nearby **Meshtastic** nodes (imported from meshmap.net, and/or heard by MeshScan) as read-only situational awareness — you can't message them, but you can see where they are and how fresh they are. | `r` reloads the SD import; ↑↓ scroll; **Enter** opens a full node card (name, hardware, battery/voltage, position, last-heard). Rows dim as they age. |
 | **MeshScan** (SCAN) | Passively **receive** the local Meshtastic mesh over the air — decrypts the public channel and drops decoded **positions, names, device telemetry (battery/voltage) and text messages** into Mesh with live signal strength. **Sweeps the LongFast / MediumFast / ShortFast presets** so it catches nodes whatever preset they use (LongFast is the global default). | Open it and it auto-cycles presets every ~15 s (`n` = next now); Enter jumps to the Mesh list, `c` clears counters. **One radio: while open you can't hear your own mesh.** |
-| **MeshTX** (MTX) | **Send** into the local Meshtastic public channel — broadcast a short text that real Meshtastic nodes can read. Makes the interop two-way. | Type a message + Enter; it momentarily retunes to the Meshtastic preset to transmit, then restores. Airs on a shared public channel — be a good neighbour. |
+| **MeshTX** (MTX) | **Send** into the local Meshtastic public channel — broadcast a short text, or your GPS position, that real Meshtastic nodes (and meshmap.net) can see. | Type + Enter sends text; **Tab** broadcasts your current GPS position. Retunes to the Meshtastic preset for the send, then restores. Airs on a shared public channel — be a good neighbour. |
+| **MeshChat** (MCHT) | A real **two-way conversation** on the Meshtastic public channel — incoming + outgoing text in one feed, like chatting with actual Meshtastic users. The culmination of the interop work. | Type + Enter to send; incoming text scrolls in; **Tab** cycles the preset (LongFast/MediumFast/ShortFast). One radio: deaf to your own mesh while open. |
 | **Gateway** (GW) | Uplink **your own** mesh to a computer — streams every frame you hear out USB serial as JSON, to feed the `dissect` tool or a self-hosted map of your fleet. | Enter toggles uplink on/off; runs in the background so you can use other apps. |
 
 ## RF & diagnostics
@@ -66,6 +67,7 @@ local Meshtastic world three ways. See the dedicated section in
 | **Console** (CFG) | Tune the radio and understand the trade-offs — edit frequency/SF/BW/CR/power and see live airtime, duty budget and link budget. | ↑↓ pick a field, ←→ change it; `r` cycles region; **`m`** applies the Meshtastic preset; s/l save/load a profile. |
 | **Ledger** (LOG) | See what's eating your 1% duty budget — per-message-type airtime accounting + a daily SD summary. | Read-only breakdown. |
 | **Probe** (PRB) | Hardware self-test — scans the I2C bus and reports radio / GPS / SD / keyboard / board status on one screen. The fastest way to spot a wiring or detection fault (e.g. a missing keyboard chip). | `r` re-scans. |
+| **WiFi** (WIFI) | Scan nearby WiFi access points (SSID / signal / channel / secured) using the otherwise-unused 2.4 GHz radio — a quick site survey. | `r` re-scans, `↑`/`↓` scroll. |
 
 ## Time
 
@@ -116,6 +118,13 @@ a rolling hour; non-urgent transmits are refused once the budget is spent.
 - **lorakit** — a Go port of the wire codec plus a **`dissect`** CLI that decodes
   frames from a hex capture or the **Gateway** app's JSON, for debugging and for
   building a self-hosted map of your own fleet.
+
+## Audio
+
+The ES8311 codec + 1 W speaker are driven through a shared `services/audio.h`
+(`audio::beep/alert/tone`), initialised at boot (a short boot chirp confirms it
+works). **Klaxon**, **Mayday**, **Countdown** and **Reflex** beeps now actually
+sound. (Still unused: the ES8311 microphone and the IR transmitter.)
 
 ## Hardware note — Cardputer-Adv keyboard
 
