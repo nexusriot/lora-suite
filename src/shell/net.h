@@ -30,4 +30,11 @@ void runRuleAction(const RuleAction& a);
 // true on success. WiFi is turned off again afterward.
 bool ntpSyncViaWifi();
 
+// Broadcast INTO the Meshtastic public channel (Direction B): momentarily retune to
+// the Meshtastic preset, transmit an encrypted Text/Position, then restore our radio
+// config. Shared by the MeshTX app and the BLE bridge. Returns false on encode/TX
+// failure (or, for position, no GPS fix).
+bool meshtasticSendText(const char* text);
+bool meshtasticSendPosition();
+
 } // namespace ls

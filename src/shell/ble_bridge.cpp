@@ -9,6 +9,8 @@
 #include "../services/lora_service.h"
 #include "../services/gps_service.h"
 #include "../services/storage.h"
+#include "../services/audio.h"
+#include "../services/clock.h"
 
 namespace ls {
 namespace ble {
@@ -77,7 +79,30 @@ static void pushStatus() {
   d["fwd"] = ctx.relayForwarded;
   d["ch"] = ctx.channel.id();
   d["q"] = ctx.lora ? (uint32_t)ctx.lora->queueDepth() : 0;
+  d["name"] = ctx.callName;
+  d["pres"] = ctx.presence;
+  d["pwr"] = (uint8_t)ctx.power;
+  d["gw"] = ctx.gatewayOn ? 1 : 0;
+  d["unread"] = ctx.unread;
+  d["duty"] = (uint8_t)(ctx.lora ? ctx.lora->duty().usedFraction(millis()) * 100.0 : 0.0);
   pushDoc(d);
+}
+
+// Push the durable contact roster as a series of `ct` events.
+static void pushRoster() {
+  char h[5], nm[13];
+  for (size_t i = 0; i < ctx.roster.size(); i++) {
+    const Contact& c = ctx.roster.at(i);
+    if (!c.used) continue;
+    JsonDocument d;
+    hex16(h, c.addr);
+    d["e"] = "ct";
+    d["addr"] = h;
+    d["name"] = ctx.roster.label(c.addr, nm, sizeof(nm));
+    d["blk"] = c.blocked ? 1 : 0;
+    d["fav"] = c.favorite ? 1 : 0;
+    pushDoc(d);
+  }
 }
 
 static void pushNodes() {
@@ -126,7 +151,23 @@ static void applyCfg(JsonDocument& d) {
   if (d["wssid"].is<const char*>() && ctx.store) {
     ctx.store->saveWifi(d["wssid"].as<const char*>(), d["wpass"] | "");
   }
-  if (d["bright"].is<int>()) M5Cardputer.Display.setBrightness((uint8_t)d["bright"].as<int>());
+
+  // Brightness + volume: apply live and persist together (NVS stores them as a pair).
+  if ((d["bright"].is<int>() || d["vol"].is<int>()) && ctx.store) {
+    uint8_t b, v;
+    ctx.store->loadSettings(b, v);
+    if (d["bright"].is<int>()) { b = (uint8_t)d["bright"].as<int>(); M5Cardputer.Display.setBrightness(b); }
+    if (d["vol"].is<int>())    { v = (uint8_t)d["vol"].as<int>();    audio::setVolume(v); }
+    ctx.store->saveSettings(b, v);
+  }
+
+  // Channel PSK: "" clears back to the public channel; otherwise key + persist.
+  if (d["psk"].is<const char*>()) {
+    const char* psk = d["psk"].as<const char*>();
+    ctx.channel.setPSK(psk);
+    if (ctx.store) ctx.store->saveProfile(ctx.store->activeSlot(), ctx.cfg, psk);
+  }
+
   if (d["region"].is<int>()) {
     switch (d["region"].as<int>()) {
       case 0: ctx.cfg.freqHz = 868000000; ctx.cfg.power = 14; break;
@@ -161,13 +202,56 @@ static void handleCmd(const char* json) {
     if (!std::strcmp(w, "status")) pushStatus();
     else if (!std::strcmp(w, "nodes")) pushNodes();
     else if (!std::strcmp(w, "mesh")) pushMesh();
+    else if (!std::strcmp(w, "roster")) pushRoster();
   } else if (!std::strcmp(c, "cfg")) {
     applyCfg(d);
   } else if (!std::strcmp(c, "ntp")) {
     bool ok = ntpSyncViaWifi();
     JsonDocument a;
-    a["e"] = "ntp";
-    a["ok"] = ok ? 1 : 0;
+    a["e"] = "ntp"; a["ok"] = ok ? 1 : 0;
+    pushDoc(a);
+  } else if (!std::strcmp(c, "pres")) {
+    ctx.presence = (uint8_t)(d["p"] | 0) & 0x03;
+    pushStatus();
+  } else if (!std::strcmp(c, "gw")) {
+    ctx.gatewayOn = (d["on"] | 0) != 0;
+    pushStatus();
+  } else if (!std::strcmp(c, "beacon")) {
+    if (ctx.gps && ctx.gps->hasFix()) {
+      Position p;
+      p.lat = ctx.gps->lat(); p.lon = ctx.gps->lon(); p.altM = (int16_t)ctx.gps->altM();
+      Frame f = makeBeacon(p);
+      netSend(f);
+    }
+  } else if (!std::strcmp(c, "ping")) {
+    const char* to = d["to"] | "FFFF";
+    uint16_t dst = (uint16_t)strtol(to, nullptr, 16);
+    static uint16_t seq = 0;
+    Frame f = makePing(dst, ++seq);
+    netSend(f);
+  } else if (!std::strcmp(c, "alert")) {
+    Frame f = makeAlert((uint8_t)(d["code"] | 0), d["label"] | "ALERT");
+    netSend(f, true);
+  } else if (!std::strcmp(c, "distress")) {
+    Position p{};
+    if (ctx.gps && ctx.gps->hasFix()) {
+      p.lat = ctx.gps->lat(); p.lon = ctx.gps->lon(); p.altM = (int16_t)ctx.gps->altM();
+    }
+    Frame f = makeDistress(p, (uint8_t)M5.Power.getBatteryLevel());
+    netSend(f, true);   // urgent: bypass the duty hold
+  } else if (!std::strcmp(c, "countdown")) {
+    int secs = d["secs"] | 0;
+    if (ctx.clock && ctx.clock->hasUtc() && secs > 0) {
+      uint32_t unix = ctx.clock->utc() + (uint32_t)secs;
+      uint8_t code = (uint8_t)(d["code"] | 0);
+      Frame f = makeCountdown(unix, code);
+      netSend(f);
+      ctx.cdTarget = unix; ctx.cdCode = code; ctx.cdFrom = ctx.myAddr; ctx.cdFired = false;
+    }
+  } else if (!std::strcmp(c, "meshtx")) {
+    bool ok = (d["pos"] | 0) ? meshtasticSendPosition() : meshtasticSendText(d["t"] | "");
+    JsonDocument a;
+    a["e"] = "meshtx"; a["ok"] = ok ? 1 : 0;
     pushDoc(a);
   }
 }

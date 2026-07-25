@@ -8,6 +8,7 @@
 #include "../services/storage.h"
 #include "../services/audio.h"
 #include "../services/clock.h"
+#include "../proto/meshtastic.h"
 #include <WiFi.h>
 #include <time.h>
 
@@ -239,6 +240,42 @@ bool ntpSyncViaWifi() {
   WiFi.disconnect(true, true);
   WiFi.mode(WIFI_OFF);
   return ok;
+}
+
+static uint32_t s_meshSeq = 0;
+
+// Retune to the Meshtastic preset, air one raw encoded packet, restore our config.
+static bool meshTxRaw(const uint8_t* frame, size_t n) {
+  if (!frame || n == 0) return false;
+  RadioCfg saved = ctx.cfg;
+  ctx.lora->applyConfig(meshtasticPresetEU868());
+  bool ok = ctx.lora->transmitRaw(frame, n);
+  ctx.lora->applyConfig(saved);
+  ctx.lora->startReceive();
+  return ok;
+}
+
+bool meshtasticSendText(const char* text) {
+  if (!ctx.lora || !text || !text[0]) return false;
+  uint8_t frame[128];
+  uint32_t pid = ((uint32_t)millis() << 8) ^ (++s_meshSeq);
+  uint32_t from = 0x4C530000u | ctx.myAddr;   // our Meshtastic-style node id (VERIFY)
+  size_t n = meshtastic_encode_text(from, pid, meshtasticDefaultChannelHash(),
+                                    text, MESH_DEFAULT_KEY, frame, sizeof(frame));
+  return meshTxRaw(frame, n);
+}
+
+bool meshtasticSendPosition() {
+  if (!ctx.lora || !ctx.gps || !ctx.gps->hasFix()) return false;
+  int32_t latI = (int32_t)(ctx.gps->lat() * 1e7);
+  int32_t lonI = (int32_t)(ctx.gps->lon() * 1e7);
+  uint8_t frame[128];
+  uint32_t pid = ((uint32_t)millis() << 8) ^ (++s_meshSeq);
+  uint32_t from = 0x4C530000u | ctx.myAddr;
+  size_t n = meshtastic_encode_position(from, pid, meshtasticDefaultChannelHash(),
+                                        latI, lonI, (int32_t)ctx.gps->altM(),
+                                        MESH_DEFAULT_KEY, frame, sizeof(frame));
+  return meshTxRaw(frame, n);
 }
 
 } // namespace ls

@@ -68,7 +68,7 @@ can never interleave with a radio transaction. See `src/hal/`.
 | GW | Gateway | Uplink heard frames over USB serial as JSON (feeds `tools/lorakit` dissect / a map of your fleet) |
 | PRB | Probe | Hardware self-test — I2C scan + radio/GPS/SD/keyboard/board status on one screen |
 | WIFI | WiFi | Scan 2.4 GHz WiFi APs (SSID / RSSI / channel / secured) — uses the otherwise-unused WiFi radio |
-| BT | Bluetooth | Enable the BLE companion bridge for the [Cardputer Companion](android/) Android app (messaging/status/mesh/config) |
+| BT | Bluetooth | Enable the BLE companion bridge for the [Cardputer Companion](android/) Android app — messages, fleet/nodes, Meshtastic, ops actions (beacon/alert/distress/countdown/gateway) and config |
 | LOG | Ledger | Per-type airtime audit against the 1% duty budget + a daily SD summary |
 | RULE | Reflex | On-device IFTTT: event→action rules (RX-type / alert / low-battery / periodic) |
 | PWR | Reactor | Battery-aware power state machine (CPU/LCD degrade with hysteresis) + Survival low-power beacon |
@@ -76,7 +76,7 @@ can never interleave with a radio transaction. See `src/hal/`.
 | TLM | Telemetry | Streams BMI270 motion + battery; paired unit shows values |
 | DROP | Dropbox | Chunked note/file transfer (stretch app) |
 | SET | Settings | Screen brightness + speaker volume, persisted to NVS (applied live) |
-| SD | SD | microSD status (type / used / free), remount, and erase-all wipe |
+| SD | SD | microSD status (type / used / free), remount, erase-all wipe, and a real FAT/FAT32 reformat (FatFs `f_mkfs`) |
 | IR | IR | Infrared NEC remote blaster (Power/Vol/Mute/Ch presets) over the IR LED |
 
 **Cross-cutting (not apps):**

@@ -91,9 +91,12 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD | CRC16(2)
 - **BLE companion bridge** (`shell/ble_bridge` + `apps/bt.h`) — an opt-in NimBLE
   Nordic-UART GATT peripheral. Commands from the phone arrive on the BLE host task
   and are queued to a single-slot mailbox drained on the main loop (radio access
-  stays single-threaded); events (incoming msg, status, node/mesh dumps) are
-  notified as newline-delimited JSON. The `android/` companion app (Kotlin/Compose)
-  is the client. BLE + WiFi share the 2.4 GHz radio, so they're not run simultaneously.
+  stays single-threaded); events are notified as newline-delimited JSON. The command
+  surface mirrors much of the firmware: `tx`, `get nodes|mesh|status|roster`, `cfg`
+  (identity/region/brightness/volume/PSK/WiFi), `pres`, `beacon`, `ping`, `alert`,
+  `distress`, `countdown`, `gw`, `meshtx`, `ntp`. The `android/` companion app
+  (Kotlin/Compose) groups these into a bottom-nav (Messages/Fleet/Mesh/Ops) + Config.
+  BLE + WiFi share the 2.4 GHz radio, so they're not run simultaneously.
 - **Meshtastic interop** — three ways to observe the foreign Meshtastic world on
   the shared 868 band, all feeding a `MeshOverlay` kept apart from `NodeTable`
   (situational-awareness only — never relayed/ACKed/addressed; keyed by 32-bit

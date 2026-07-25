@@ -3,7 +3,9 @@
 #include <Preferences.h>
 #include <SPI.h>
 #include <SD.h>
+#include <cstdlib>
 #include <cstring>
+#include "ff.h"          // bundled FatFs — f_mkfs() for a real card format
 #include "../hal/pins.h"
 #include "../hal/spi_bus.h"
 
@@ -141,6 +143,27 @@ bool Storage::sdBegin() {
   SpiBus::Guard g;
   sd_ = SD.begin(pins::SD_CS, SPI, 20000000);
   return sd_;
+}
+
+bool Storage::sdFormat() {
+  SpiBus::Guard g;
+  // f_mkfs drives the card through the SD library's registered FatFs diskio, so the
+  // card must be initialized first (SD.begin registers drive "0:" — the only volume
+  // this firmware uses). FM_ANY = FAT/FAT32 with an MBR partition (exFAT is disabled
+  // in the framework's ffconf, so large cards land on FAT32) — the layout PCs expect.
+  if (!sd_) {
+    sd_ = SD.begin(pins::SD_CS, SPI, 20000000);
+    if (!sd_) return false;
+  }
+  BYTE* work = (BYTE*)malloc(FF_MAX_SS);
+  if (!work) return false;
+  FRESULT res = f_mkfs("0:", FM_ANY, 0, work, FF_MAX_SS);
+  free(work);
+
+  // The old mount is stale after mkfs — cycle it so the fresh filesystem is live.
+  SD.end();
+  sd_ = SD.begin(pins::SD_CS, SPI, 20000000);
+  return res == FR_OK;
 }
 
 bool Storage::appendLine(const char* path, const char* line) {

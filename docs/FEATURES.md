@@ -91,7 +91,7 @@ local Meshtastic world three ways. See the dedicated section in
 | App | For what | How |
 |---|---|---|
 | **Settings** (SET) | Adjust screen brightness and speaker volume and have them stick across reboots (saved to NVS). | ↑↓ pick a field, ←→ adjust (±16); applied live and persisted on exit. |
-| **SD** (SD) | Check the microSD at a glance — mount status, card type, total / used / free — and wipe it. | `r` remounts; `e` then **Enter** erases every file (recursive delete; a true FAT reformat isn't exposed by the Arduino SD API). |
+| **SD** (SD) | Check the microSD at a glance — mount status, card type, total / used / free — and wipe or reformat it. | `r` remounts; `e`+**Enter** erases every file (keeps the filesystem); `f`+**Enter** does a real FAT/FAT32 reformat (FatFs `f_mkfs`, an MBR-partitioned layout PCs accept). |
 | **IR** (IR) | Blast infrared remote codes from the IR LED — a universal-remote starter (Power / Vol± / Mute / Ch±). | ↑↓ pick a code, **Enter** transmits (raw NEC). Reprogram the table for your own gear; **verify the IR LED GPIO on the Adv**. |
 
 ---
@@ -134,12 +134,20 @@ a rolling hour; non-urgent transmits are refused once the budget is spent.
 
 The **Bluetooth** app enables a BLE bridge (`shell/ble_bridge`, a Nordic-UART GATT
 service) that the **Cardputer Companion** Android app (in [`android/`](../android))
-pairs to. Over it the phone can send/receive LoRa messages, read a live status
-dashboard + node table, view the scanned Meshtastic feed, change config
-(callsign/address/region/brightness), store the device's WiFi credentials, and
-trigger an NTP time-sync — a phone front-end like the Meshtastic app. The ESP32-S3
-is BLE-only (no Classic SPP); commands/events are newline-delimited JSON. BLE and
-the WiFi scanner/NTP sync share the 2.4 GHz radio — don't run them at once.
+pairs to — a phone front-end like the Meshtastic app. Its functions are grouped into
+a bottom-navigation bar plus a Config screen, each mapping to firmware features:
+
+- **Link** — scan / connect / disconnect.
+- **Messages** — send/receive LoRa text (broadcast or addressed), canned quick-messages, and the contact roster (tap a contact to address it).
+- **Fleet** — live status (GPS / battery / duty / power / channel), the node table with per-node **ping**, and your own **presence** selector.
+- **Mesh** — the scanned Meshtastic node feed, plus send text / your GPS position **into** the Meshtastic public channel.
+- **Ops** — one-tap actions: GPS **beacon**, **ping**, **alert** (pager), mesh **countdown**, **gateway** toggle, and a confirm-gated **distress / mayday**.
+- **Config** — identity (callsign/address), region, brightness, volume, channel **PSK**, WiFi credentials, and an **NTP** time-sync.
+
+The ESP32-S3 is BLE-only (no Classic SPP); commands/events are newline-delimited
+JSON. BLE and the WiFi scanner/NTP sync share the 2.4 GHz radio — don't run them at
+once. (Some on-device screens — the launcher, Radar's polar plot, Console's live
+calculators, Probe — stay device-only by nature.)
 
 ## Audio
 

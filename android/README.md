@@ -11,19 +11,24 @@ The ESP32-S3 is **BLE-only** (no Classic Bluetooth / SPP). The firmware exposes 
 Nordic UART Service (NUS) GATT peripheral; this app connects to it and exchanges
 **newline-delimited JSON**:
 
-- **commands → device:** `{"c":"tx","to":"FFFF","t":"hi"}`, `{"c":"get","w":"nodes|mesh|status"}`, `{"c":"cfg",...}`
-- **events → phone:** `{"e":"msg",...}`, `{"e":"st",...}` (status), `{"e":"nd",...}` (node), `{"e":"mn",...}` (Meshtastic node)
+- **commands → device:** `{"c":"tx","to":"FFFF","t":"hi"}`, `{"c":"get","w":"nodes|mesh|status|roster"}`, `{"c":"cfg",...}`, `{"c":"pres","p":2}`, `{"c":"beacon"}`, `{"c":"ping","to":"1A2B"}`, `{"c":"alert","label":"HELP"}`, `{"c":"distress"}`, `{"c":"countdown","secs":60}`, `{"c":"gw","on":1}`, `{"c":"meshtx","t":"hi"}`, `{"c":"ntp"}`
+- **events → phone:** `{"e":"msg"}`, `{"e":"st"}` (status), `{"e":"nd"}` (node), `{"e":"ct"}` (contact), `{"e":"mn"}` (Meshtastic node), `{"e":"ntp"}`, `{"e":"meshtx"}`
 
 On the device: open the **Bluetooth** (`BT`) app and press Enter to enable the
 bridge, then Scan + connect here.
 
 ## Screens
 
-- **Link** — scan for `LoRa-*` devices and connect.
-- **Chat** — send LoRa text (broadcast `FFFF` or a hex address) and see incoming messages.
-- **Status** — GPS fix, battery, RX/relay counts, channel, TX-queue depth, and the node table.
-- **Mesh** — the foreign Meshtastic nodes the device has scanned (from MeshScan).
-- **Config** — set the callsign, address, region and screen brightness on the device.
+Functions are grouped by area — a bottom navigation bar for the day-to-day areas,
+plus a Config screen behind the top-bar gear (settings live off the main flow, per
+Android convention):
+
+- **Link** — scan for `LoRa-*` devices and connect / disconnect.
+- **Messages** — send LoRa text (broadcast `FFFF` or a hex address), canned quick-messages, and the contact roster (tap a contact to address it).
+- **Fleet** — live status (GPS / battery / duty / power / channel), the node table with per-node **Ping**, and your own **presence** selector.
+- **Mesh** — the foreign Meshtastic nodes the device has scanned (MeshScan), plus send text / your GPS position **into** the Meshtastic public channel.
+- **Ops** — one-tap actions: GPS **beacon**, **ping**, **alert** pager, mesh **countdown**, **gateway** toggle, and a confirm-gated **distress / mayday**.
+- **Config** (gear) — callsign, address, region, brightness, volume, channel **PSK**, WiFi credentials, and an **NTP** time-sync.
 
 ## Build
 

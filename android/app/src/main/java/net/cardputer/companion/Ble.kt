@@ -28,10 +28,13 @@ data class ScanItem(val name: String, val address: String)
 data class Msg(val from: String, val text: String, val rssi: Int, val mine: Boolean)
 data class NodeInfo(val addr: String, val name: String, val batt: Int, val rssi: Int, val age: Long)
 data class MeshInfo(val id: String, val name: String, val lat: Double, val lon: Double, val batt: Int, val hasPos: Boolean)
+data class Contact(val addr: String, val name: String, val blocked: Boolean, val favorite: Boolean)
 data class Identity(val name: String = "node", val addr: String = "0000")
 data class Status(
     val fix: Boolean = false, val lat: Double = 0.0, val lon: Double = 0.0, val sats: Int = 0,
-    val batt: Int = 0, val rx: Long = 0, val fwd: Long = 0, val ch: Int = 0, val q: Int = 0
+    val batt: Int = 0, val rx: Long = 0, val fwd: Long = 0, val ch: Int = 0, val q: Int = 0,
+    val name: String = "", val pres: Int = 0, val pwr: Int = 0,
+    val gw: Boolean = false, val unread: Int = 0, val duty: Int = 0
 )
 
 // Talks to the cardputer's Nordic-UART-Service bridge: writes JSON commands, parses
@@ -58,9 +61,12 @@ class BleManager(private val ctx: Context) {
     val messages = mutableStateListOf<Msg>()
     val nodes = mutableStateListOf<NodeInfo>()
     val mesh = mutableStateListOf<MeshInfo>()
+    val contacts = mutableStateListOf<Contact>()
     var status by mutableStateOf(Status()); private set
     var identity by mutableStateOf(Identity()); private set
     var ntpResult by mutableStateOf<Boolean?>(null)   // null = idle/pending, true/false = last outcome
+    var meshTxResult by mutableStateOf<Boolean?>(null)
+    var opsNote by mutableStateOf("")                 // transient feedback for fire-and-forget actions
 
     fun startScan() {
         scanItems.clear()
@@ -117,21 +123,37 @@ class BleManager(private val ctx: Context) {
 
     fun requestNodes() { main.post { nodes.clear() }; send("{\"c\":\"get\",\"w\":\"nodes\"}") }
     fun requestMesh() { main.post { mesh.clear() }; send("{\"c\":\"get\",\"w\":\"mesh\"}") }
+    fun requestRoster() { main.post { contacts.clear() }; send("{\"c\":\"get\",\"w\":\"roster\"}") }
     fun requestStatus() = send("{\"c\":\"get\",\"w\":\"status\"}")
 
     fun sendConfig(name: String?, addr: String?, region: Int?, bright: Int?,
+                   vol: Int? = null, psk: String? = null,
                    wssid: String? = null, wpass: String? = null) {
         val o = JSONObject().put("c", "cfg")
         if (!name.isNullOrBlank()) o.put("name", name)
         if (!addr.isNullOrBlank()) o.put("addr", addr)
         if (region != null) o.put("region", region)
         if (bright != null) o.put("bright", bright)
+        if (vol != null) o.put("vol", vol)
+        if (psk != null) o.put("psk", psk)     // "" clears back to the public channel
         if (!wssid.isNullOrBlank()) { o.put("wssid", wssid); o.put("wpass", wpass ?: "") }
         send(o.toString())
     }
 
     // Ask the device to associate with its stored WiFi and sync UTC over SNTP.
     fun syncNtp() { main.post { ntpResult = null }; send("{\"c\":\"ntp\"}") }
+
+    fun setPresence(p: Int) = send(JSONObject().put("c", "pres").put("p", p).toString())
+    fun setGateway(on: Boolean) = send(JSONObject().put("c", "gw").put("on", if (on) 1 else 0).toString())
+    fun sendBeacon() { send("{\"c\":\"beacon\"}"); note("beacon sent") }
+    fun sendPing(to: String) { send(JSONObject().put("c", "ping").put("to", to).toString()); note("ping $to") }
+    fun sendAlert(label: String) { send(JSONObject().put("c", "alert").put("code", 0).put("label", label).toString()); note("alert: $label") }
+    fun sendDistress() { send("{\"c\":\"distress\"}"); note("DISTRESS sent") }
+    fun sendCountdown(secs: Int) { send(JSONObject().put("c", "countdown").put("secs", secs).put("code", 0).toString()); note("countdown ${secs}s") }
+    fun meshSendText(t: String) { if (t.isBlank()) return; main.post { meshTxResult = null }; send(JSONObject().put("c", "meshtx").put("t", t).toString()) }
+    fun meshSendPosition() { main.post { meshTxResult = null }; send("{\"c\":\"meshtx\",\"pos\":1}") }
+
+    private fun note(s: String) = main.post { opsNote = s }
 
     private val gattCb = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, st: Int, newState: Int) {
@@ -187,14 +209,23 @@ class BleManager(private val ctx: Context) {
                 "st" -> status = Status(
                     fix = o.optInt("fix") == 1, lat = o.optDouble("lat", 0.0), lon = o.optDouble("lon", 0.0),
                     sats = o.optInt("sats"), batt = o.optInt("batt"), rx = o.optLong("rx"),
-                    fwd = o.optLong("fwd"), ch = o.optInt("ch"), q = o.optInt("q")
+                    fwd = o.optLong("fwd"), ch = o.optInt("ch"), q = o.optInt("q"),
+                    name = o.optString("name"), pres = o.optInt("pres"), pwr = o.optInt("pwr"),
+                    gw = o.optInt("gw") == 1, unread = o.optInt("unread"), duty = o.optInt("duty")
                 )
                 "nd" -> upsert(nodes, o.optString("addr")) {
                     NodeInfo(o.optString("addr"), o.optString("name"), o.optInt("batt"), o.optInt("rssi"), o.optLong("age"))
                 }
+                "ct" -> {
+                    val addr = o.optString("addr")
+                    val v = Contact(addr, o.optString("name"), o.optInt("blk") == 1, o.optInt("fav") == 1)
+                    val i = contacts.indexOfFirst { it.addr == addr }
+                    if (i >= 0) contacts[i] = v else contacts.add(v)
+                }
                 "mn" -> upsertMesh(o)
                 "cfg" -> identity = Identity(o.optString("name"), o.optString("addr"))
                 "ntp" -> ntpResult = o.optInt("ok") == 1
+                "meshtx" -> meshTxResult = o.optInt("ok") == 1
             }
         }
     }

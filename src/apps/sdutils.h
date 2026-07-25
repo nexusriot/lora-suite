@@ -11,10 +11,10 @@
 
 namespace ls {
 
-// microSD utilities: mount status + capacity, remount, and a confirm-gated
-// erase-all (recursive delete of every file — the practical "format", since the
-// Arduino SD API doesn't expose a low-level FAT reformat). All SD access goes
-// through the shared SPI-bus guard so it never collides with the radio.
+// microSD utilities: mount status + capacity, remount, a confirm-gated erase-all
+// (recursive file delete, keeps the filesystem), and a confirm-gated real FAT/FAT32
+// reformat via FatFs f_mkfs (Storage::sdFormat). All SD access goes through the
+// shared SPI-bus guard so it never collides with the radio.
 class SdUtils : public App {
 public:
   const char* name() const override { return "SD"; }
@@ -30,11 +30,16 @@ public:
   void onEnter() override { refresh(); }
 
   void onKey(const KeyEvent& k) override {
-    if (k.ch == 'r') { remount(); armed_ = false; }
-    else if (k.ch == 'e') armed_ = true;
-    else if (k.enter && armed_) { eraseAll(); armed_ = false; refresh(); }
-    else if (k.esc) armed_ = false;   // note: shell pops on esc; harmless
-    else armed_ = false;
+    if (k.ch == 'r') { remount(); arm_ = NONE; note_ = nullptr; }
+    else if (k.ch == 'e') { arm_ = ERASE; note_ = nullptr; }
+    else if (k.ch == 'f') { arm_ = FORMAT; note_ = nullptr; }
+    else if (k.enter && arm_ == ERASE) { eraseAll(); arm_ = NONE; note_ = "erased"; refresh(); }
+    else if (k.enter && arm_ == FORMAT) {
+      bool ok = ctx.store && ctx.store->sdFormat();   // blocks a few seconds
+      arm_ = NONE; note_ = ok ? "formatted" : "format failed"; refresh();
+    }
+    else if (k.esc) arm_ = NONE;   // note: shell pops on esc; harmless
+    else arm_ = NONE;
   }
 
   void draw(M5Canvas& g) override {
@@ -62,18 +67,29 @@ public:
     std::snprintf(s, sizeof(s), "free %llu MB", (unsigned long long)(totalMB_ - usedMB_));
     g.drawString(s, 6, y); y += 16;
 
-    if (armed_) {
+    if (arm_ == ERASE) {
       g.setTextColor(theme::CRIT, theme::BG);
-      g.drawString("ERASE ALL? Enter=yes", 6, y);
+      g.drawString("ERASE ALL FILES? Enter=yes", 6, y);
+    } else if (arm_ == FORMAT) {
+      g.setTextColor(theme::CRIT, theme::BG);
+      g.drawString("FORMAT CARD? Enter=yes", 6, y);
     } else {
       g.setTextColor(theme::MUTED, theme::BG);
-      g.drawString("r=remount   e=erase all", 6, y);
+      g.drawString("r=remount e=erase f=format", 6, y);
+      if (note_) {
+        y += 12;
+        g.setTextColor(theme::GOOD, theme::BG);
+        g.drawString(note_, 6, y);
+      }
     }
     ui::footer(g);
   }
 
 private:
-  bool mounted_ = false, armed_ = false;
+  enum Arm { NONE, ERASE, FORMAT };
+  bool mounted_ = false;
+  Arm arm_ = NONE;
+  const char* note_ = nullptr;
   const char* typeStr_ = "?";
   uint64_t sizeMB_ = 0, usedMB_ = 0, totalMB_ = 0;
 

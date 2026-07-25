@@ -4,6 +4,7 @@
 #include <cstring>
 #include "../shell/app.h"
 #include "../shell/context.h"
+#include "../shell/net.h"
 #include "../services/lora_service.h"
 #include "../services/gps_service.h"
 #include "../proto/meshtastic.h"
@@ -72,48 +73,19 @@ public:
 private:
   char buf_[64] = {0};
   int len_ = 0;
-  uint32_t sent_ = 0, seq_ = 0;
+  uint32_t sent_ = 0;
   char status_[16] = {0};
 
   void send() {
-    if (!ctx.lora || len_ == 0) return;
-    uint8_t frame[128];
-    uint32_t pid = ((uint32_t)millis() << 8) ^ (++seq_);
-    uint32_t from = 0x4C530000u | ctx.myAddr;   // our Meshtastic-style node id (VERIFY)
-    size_t n = meshtastic_encode_text(from, pid, meshtasticDefaultChannelHash(),
-                                      buf_, MESH_DEFAULT_KEY, frame, sizeof(frame));
-    if (!n) { std::strncpy(status_, "encode fail", sizeof(status_)); return; }
-
-    RadioCfg saved = ctx.cfg;
-    ctx.lora->applyConfig(meshtasticPresetEU868());
-    bool ok = ctx.lora->transmitRaw(frame, n);
-    ctx.lora->applyConfig(saved);
-    ctx.lora->startReceive();
-
-    if (ok) { std::strncpy(status_, "sent", sizeof(status_)); sent_++; len_ = 0; buf_[0] = 0; }
-    else std::strncpy(status_, "TX failed", sizeof(status_));
+    if (len_ == 0) return;
+    if (meshtasticSendText(buf_)) {
+      std::strncpy(status_, "sent", sizeof(status_)); sent_++; len_ = 0; buf_[0] = 0;
+    } else std::strncpy(status_, "TX failed", sizeof(status_));
   }
 
   void sendPosition() {   // Tab: broadcast our GPS as a Meshtastic Position
-    if (!ctx.lora || !ctx.gps || !ctx.gps->hasFix()) {
-      std::strncpy(status_, "no GPS fix", sizeof(status_));
-      return;
-    }
-    int32_t latI = (int32_t)(ctx.gps->lat() * 1e7);
-    int32_t lonI = (int32_t)(ctx.gps->lon() * 1e7);
-    uint8_t frame[128];
-    uint32_t pid = ((uint32_t)millis() << 8) ^ (++seq_);
-    uint32_t from = 0x4C530000u | ctx.myAddr;
-    size_t n = meshtastic_encode_position(from, pid, meshtasticDefaultChannelHash(),
-                                          latI, lonI, (int32_t)ctx.gps->altM(),
-                                          MESH_DEFAULT_KEY, frame, sizeof(frame));
-    if (!n) { std::strncpy(status_, "encode fail", sizeof(status_)); return; }
-    RadioCfg saved = ctx.cfg;
-    ctx.lora->applyConfig(meshtasticPresetEU868());
-    bool ok = ctx.lora->transmitRaw(frame, n);
-    ctx.lora->applyConfig(saved);
-    ctx.lora->startReceive();
-    if (ok) { std::strncpy(status_, "pos sent", sizeof(status_)); sent_++; }
+    if (!ctx.gps || !ctx.gps->hasFix()) { std::strncpy(status_, "no GPS fix", sizeof(status_)); return; }
+    if (meshtasticSendPosition()) { std::strncpy(status_, "pos sent", sizeof(status_)); sent_++; }
     else std::strncpy(status_, "TX failed", sizeof(status_));
   }
 };

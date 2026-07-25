@@ -46,6 +46,9 @@ public:
   // microSD.
   bool sdReady() const { return sd_; }
   bool sdBegin();
+  // Reformat the card to a fresh FAT/FAT32 filesystem (erases everything). Blocks
+  // for seconds; returns true on success and leaves the card remounted.
+  bool sdFormat();
   bool appendLine(const char* path, const char* line);
   int  readFile(const char* path, uint8_t* buf, int cap);   // bytes read from start, or -1
   int  readTail(const char* path, uint8_t* buf, int cap);   // last <=cap bytes, or -1
