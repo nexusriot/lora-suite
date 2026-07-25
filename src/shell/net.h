@@ -11,6 +11,11 @@ namespace ls {
 bool netSend(Frame& f, bool urgent = false);
 
 Frame makeText(uint16_t dst, const char* text, bool wantAck = false);
+
+// Send a text message of up to TEXT_MAX chars: Squeeze-compressed when that
+// helps, then split across FLAG_FRAGMENT frames if it still exceeds one frame.
+// Prefer this over makeText+netSend for anything user-composed.
+bool netSendText(uint16_t dst, const char* text, bool wantAck = false);
 Frame makeAck(uint16_t dst, uint16_t ackId);
 Frame makeBeacon(const Position& p);
 Frame makeAlert(uint8_t code, const char* label);

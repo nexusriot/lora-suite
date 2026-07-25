@@ -34,6 +34,10 @@ void ScreenManager::onRaw(const Frame& f, const RxMeta& m) {
   if (App* t = top()) t->onRawPacket(f, m);
 }
 
+void ScreenManager::onTextMessage(uint16_t src, const char* text, uint16_t len, const RxMeta& m) {
+  if (App* t = top()) t->onTextMessage(src, text, len, m);
+}
+
 void ScreenManager::update() {
   if (App* t = top()) t->update();
 }

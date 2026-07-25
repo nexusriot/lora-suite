@@ -5,14 +5,17 @@
 #include "../shell/context.h"
 #include "../services/ir.h"
 #include "../services/audio.h"
+#include "../services/storage.h"
 #include "../ui/theme.h"
 #include "../ui/widgets.h"
 
 namespace ls {
 
-// IR remote — sends canned NEC codes over the (otherwise unused) IR LED. The codes
-// below are generic examples; real remotes are device-specific, so reprogram the
-// table for your gear. Uses the raw NEC protocol (see services/ir.h).
+// IR remote — sends NEC codes over the IR LED. The code table is user data
+// (`ctx.irCodes`, persisted in NVS and editable from the phone over the BLE
+// bridge) rather than a hardcoded list, so the device can be programmed to drive
+// your own gear; a generic set is loaded the first time it runs. Uses the raw NEC
+// protocol (see services/ir.h).
 class IrBlaster : public App {
 public:
   const char* name() const override { return "IR"; }
@@ -29,12 +32,24 @@ public:
   void onEnter() override { ir::init(); }
 
   void onKey(const KeyEvent& k) override {
+    int n = (int)ctx.irCodes.size();
     if (k.up && sel_ > 0) sel_--;
-    else if (k.down && sel_ + 1 < N) sel_++;
-    else if (k.enter) {
-      ir::sendNEC(CODES[sel_].addr, CODES[sel_].cmd);
+    else if (k.down && sel_ + 1 < n) sel_++;
+    else if (k.enter && n) {
+      const IrCode& c = ctx.irCodes.at(sel_);
+      ir::sendNEC(c.addr, c.cmd);
       audio::tick();
       sent_ = sel_ + 1;
+    } else if (k.ch == 'd' && n) {            // delete the selected code
+      ctx.irCodes.remove(sel_);
+      if (sel_ && sel_ >= (int)ctx.irCodes.size()) sel_--;
+      if (ctx.store) ctx.store->saveIrCodes(ctx.irCodes);
+      sent_ = 0;
+    } else if (k.ch == 'r') {                 // restore the generic set
+      ctx.irCodes.loadDefaults();
+      if (ctx.store) ctx.store->saveIrCodes(ctx.irCodes);
+      sel_ = 0;
+      sent_ = 0;
     }
   }
 
@@ -43,39 +58,40 @@ public:
     ui::header(g, *this);
     g.setTextSize(1);
     int y = ui::BODY_Y + 2;
-    g.setTextColor(theme::MUTED, theme::BG);
-    g.drawString("generic NEC codes:", 6, y);
-    y += 13;
+    int n = (int)ctx.irCodes.size();
 
-    for (int i = 0; i < N; i++) {
-      bool s = (i == sel_);
-      char row[32];
-      std::snprintf(row, sizeof(row), "%c%-8s  %02X:%02X", s ? '>' : ' ', CODES[i].label, CODES[i].addr, CODES[i].cmd);
-      g.setTextColor(s ? theme::ACCENT : theme::TEXT, theme::BG);
-      g.drawString(row, 6, y);
-      y += 11;
+    g.setTextColor(theme::MUTED, theme::BG);
+    g.drawString("NEC codes (edit from phone):", 6, y);
+    y += 12;
+
+    if (!n) {
+      g.setTextColor(theme::WARN, theme::BG);
+      g.drawString("no codes - press r", 6, y);
+    } else {
+      int start = sel_ > 5 ? sel_ - 5 : 0;
+      for (int i = start; i < n && i < start + 6; i++) {
+        const IrCode& c = ctx.irCodes.at(i);
+        bool s = (i == sel_);
+        char row[36];
+        std::snprintf(row, sizeof(row), "%c%-11s %02X:%02X", s ? '>' : ' ', c.label, c.addr, c.cmd);
+        g.setTextColor(s ? theme::ACCENT : theme::TEXT, theme::BG);
+        g.drawString(row, 6, y);
+        y += 11;
+      }
     }
 
     g.setTextColor(theme::MUTED, theme::BG);
-    if (sent_) {
-      char s[24];
-      std::snprintf(s, sizeof(s), "sent %s", CODES[sent_ - 1].label);
+    if (sent_ && sent_ <= n) {
+      char s[28];
+      std::snprintf(s, sizeof(s), "sent %s", ctx.irCodes.at(sent_ - 1).label);
       g.drawString(s, 6, ui::SCREEN_H - ui::FOOTER_H - 20);
     }
-    g.drawString("Enter = transmit", 6, ui::SCREEN_H - ui::FOOTER_H - 10);
+    g.drawString("Enter=send d=del r=reset", 6, ui::SCREEN_H - ui::FOOTER_H - 10);
     ui::footer(g);
   }
 
 private:
-  struct Code { const char* label; uint8_t addr; uint8_t cmd; };
-  static const int N = 6;
-  static constexpr Code CODES[N] = {
-    {"Power", 0x00, 0x0C}, {"Vol +", 0x00, 0x10}, {"Vol -", 0x00, 0x11},
-    {"Mute", 0x00, 0x0D},  {"Ch +", 0x00, 0x20},  {"Ch -", 0x00, 0x21},
-  };
   int sel_ = 0, sent_ = 0;
 };
-
-constexpr IrBlaster::Code IrBlaster::CODES[];
 
 } // namespace ls

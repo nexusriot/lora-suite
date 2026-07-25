@@ -4,6 +4,7 @@
 #include "../proto/roster.h"
 #include "../proto/rules.h"
 #include "../proto/meshoverlay.h"
+#include "../proto/ircodes.h"
 
 namespace ls {
 
@@ -42,6 +43,18 @@ public:
   // WiFi credentials for the NTP time fallback.
   void loadWifi(char* ssid, uint8_t ssidCap, char* pass, uint8_t passCap);
   void saveWifi(const char* ssid, const char* pass);
+
+  // User-editable IR remote codes (NVS blob).
+  bool loadIrCodes(IrCodeSet& s);
+  void saveIrCodes(const IrCodeSet& s);
+
+  // Dump a 16-bit RGB565 framebuffer to SD as a 24-bit BMP. `path` is created or
+  // overwritten. Rows are converted and written one at a time, so this needs no
+  // large intermediate buffer.
+  bool writeBmp(const char* path, const uint16_t* px, uint32_t w, uint32_t h);
+
+  // Next unused /shots/NNN.bmp path; false if the directory is full or absent.
+  bool nextShotPath(char* out, size_t cap);
 
   // microSD.
   bool sdReady() const { return sd_; }

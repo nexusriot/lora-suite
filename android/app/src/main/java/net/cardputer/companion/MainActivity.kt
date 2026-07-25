@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,6 +59,7 @@ private enum class Dest(val label: String, val icon: ImageVector) {
     Fleet("Fleet", Icons.Filled.Groups),
     Mesh("Mesh", Icons.Filled.Hub),
     Ops("Ops", Icons.Filled.Warning),
+    Remote("Remote", Icons.Filled.SettingsRemote),
     Config("Config", Icons.Filled.Settings),
 }
 
@@ -69,7 +71,7 @@ private val POWER = listOf("Performance", "Balanced", "Endurance", "Survival")
 fun App(ble: BleManager) {
     MaterialTheme(colorScheme = darkColorScheme()) {
         var dest by remember { mutableStateOf(Dest.Link) }
-        val bottom = listOf(Dest.Link, Dest.Messages, Dest.Fleet, Dest.Mesh, Dest.Ops)
+        val bottom = listOf(Dest.Link, Dest.Messages, Dest.Fleet, Dest.Mesh, Dest.Ops, Dest.Remote)
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -101,6 +103,7 @@ fun App(ble: BleManager) {
                     Dest.Fleet -> FleetScreen(ble)
                     Dest.Mesh -> MeshScreen(ble)
                     Dest.Ops -> OpsScreen(ble)
+                    Dest.Remote -> RemoteScreen(ble)
                     Dest.Config -> ConfigScreen(ble)
                 }
             }
@@ -326,6 +329,78 @@ private fun OpsScreen(ble: BleManager) {
                 }
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = { armDistress = false }) { Text("Cancel") }
+            }
+        }
+    }
+}
+
+// Programs the device's IR code table. The device owns the list (persisted in
+// NVS); this edits it and fires codes.
+@Composable
+private fun RemoteScreen(ble: BleManager) {
+    var label by remember { mutableStateOf("") }
+    var addr by remember { mutableStateOf("") }
+    var cmd by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    val on = connected(ble)
+
+    LaunchedEffect(ble.conn) { if (on) ble.requestIrCodes() }
+
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("IR remote", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { ble.requestIrCodes() }, enabled = on) { Text("Refresh") }
+        }
+        Text("Tap a code to transmit it from the device.", style = MaterialTheme.typography.bodySmall)
+        if (ble.opsNote.isNotBlank()) Text(ble.opsNote, color = MaterialTheme.colorScheme.primary)
+
+        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            items(ble.irCodes) { c ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).clickable(enabled = on) { ble.irSend(c.index) }) {
+                        Text(c.label, style = MaterialTheme.typography.bodyMedium)
+                        Text("addr %02X  cmd %02X".format(c.addr, c.cmd), style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = {
+                        editing = c.index
+                        label = c.label
+                        addr = "%02X".format(c.addr)
+                        cmd = "%02X".format(c.cmd)
+                    }) { Text("Edit") }
+                    TextButton(onClick = { ble.irDelete(c.index) }, enabled = on) { Text("Del") }
+                }
+            }
+            if (ble.irCodes.isEmpty()) item {
+                Text("no codes on device", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text(if (editing == null) "Add a code" else "Edit code ${editing!! + 1}",
+            style = MaterialTheme.typography.titleSmall)
+        OutlinedTextField(label, { label = it.take(11) }, label = { Text("label") }, singleLine = true,
+            modifier = Modifier.fillMaxWidth())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(addr, { addr = it.filter { c -> c.isDigit() || c in "abcdefABCDEF" }.take(2) },
+                label = { Text("addr hex") }, singleLine = true, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            OutlinedTextField(cmd, { cmd = it.filter { c -> c.isDigit() || c in "abcdefABCDEF" }.take(2) },
+                label = { Text("cmd hex") }, singleLine = true, modifier = Modifier.weight(1f))
+        }
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = {
+                    val a = addr.toIntOrNull(16) ?: 0
+                    val c = cmd.toIntOrNull(16) ?: 0
+                    ble.irSet(editing, label.ifBlank { "code" }, a, c)
+                    editing = null; label = ""; addr = ""; cmd = ""
+                },
+                enabled = on && cmd.isNotBlank()
+            ) { Text(if (editing == null) "Add" else "Save") }
+            if (editing != null) {
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = { editing = null; label = ""; addr = ""; cmd = "" }) { Text("Cancel") }
             }
         }
     }

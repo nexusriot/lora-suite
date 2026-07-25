@@ -29,6 +29,7 @@ data class Msg(val from: String, val text: String, val rssi: Int, val mine: Bool
 data class NodeInfo(val addr: String, val name: String, val batt: Int, val rssi: Int, val age: Long)
 data class MeshInfo(val id: String, val name: String, val lat: Double, val lon: Double, val batt: Int, val hasPos: Boolean)
 data class Contact(val addr: String, val name: String, val blocked: Boolean, val favorite: Boolean)
+data class IrCode(val index: Int, val label: String, val addr: Int, val cmd: Int)
 data class Identity(val name: String = "node", val addr: String = "0000")
 data class Status(
     val fix: Boolean = false, val lat: Double = 0.0, val lon: Double = 0.0, val sats: Int = 0,
@@ -62,6 +63,7 @@ class BleManager(private val ctx: Context) {
     val nodes = mutableStateListOf<NodeInfo>()
     val mesh = mutableStateListOf<MeshInfo>()
     val contacts = mutableStateListOf<Contact>()
+    val irCodes = mutableStateListOf<IrCode>()
     var status by mutableStateOf(Status()); private set
     var identity by mutableStateOf(Identity()); private set
     var ntpResult by mutableStateOf<Boolean?>(null)   // null = idle/pending, true/false = last outcome
@@ -125,6 +127,18 @@ class BleManager(private val ctx: Context) {
     fun requestMesh() { main.post { mesh.clear() }; send("{\"c\":\"get\",\"w\":\"mesh\"}") }
     fun requestRoster() { main.post { contacts.clear() }; send("{\"c\":\"get\",\"w\":\"roster\"}") }
     fun requestStatus() = send("{\"c\":\"get\",\"w\":\"status\"}")
+    fun requestIrCodes() { main.post { irCodes.clear() }; send("{\"c\":\"get\",\"w\":\"ir\"}") }
+
+    // IR remote programming. The device owns the table (NVS); every mutation
+    // echoes the whole list back, so the UI just mirrors what it receives.
+    fun irSet(index: Int?, label: String, addr: Int, cmd: Int) {
+        val o = JSONObject().put("c", "irset").put("label", label).put("addr", addr).put("cmd", cmd)
+        if (index != null) o.put("i", index)
+        main.post { irCodes.clear() }
+        send(o.toString())
+    }
+    fun irDelete(index: Int) { main.post { irCodes.clear() }; send(JSONObject().put("c", "irdel").put("i", index).toString()) }
+    fun irSend(index: Int) { send(JSONObject().put("c", "irsend").put("i", index).toString()); note("IR sent") }
 
     fun sendConfig(name: String?, addr: String?, region: Int?, bright: Int?,
                    vol: Int? = null, psk: String? = null,
@@ -224,6 +238,12 @@ class BleManager(private val ctx: Context) {
                 }
                 "mn" -> upsertMesh(o)
                 "cfg" -> identity = Identity(o.optString("name"), o.optString("addr"))
+                "ir" -> {
+                    val idx = o.optInt("i")
+                    val v = IrCode(idx, o.optString("label"), o.optInt("addr"), o.optInt("cmd"))
+                    val at = irCodes.indexOfFirst { it.index == idx }
+                    if (at >= 0) irCodes[at] = v else irCodes.add(v)
+                }
                 "ntp" -> ntpResult = o.optInt("ok") == 1
                 "meshtx" -> meshTxResult = o.optInt("ok") == 1
             }

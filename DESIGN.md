@@ -1,6 +1,6 @@
 # LoRa Suite — Design
 
-A multi-app LoRa toolkit (36 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
+A multi-app LoRa toolkit (38 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
 (SX1262 radio + ATGM336H GPS), at `/home/vlad/workspace/my/lora-suite`. This document
 is the maintainable companion to the rendered [design brief](docs/design-brief.html);
 see [ROADMAP.md](ROADMAP.md) for the feature backlog and [README.md](README.md) for
@@ -12,7 +12,7 @@ the user-facing overview.
   framing, crypto, mesh dedup, duty accounting — live in shared services. Adding
   an app means writing a screen, not a driver.
 - **The portable core is host-tested.** Everything in `src/proto` and `src/crypto`
-  is dependency-free C++ with native unit tests (`test/native/run.sh`, 461 checks),
+  is dependency-free C++ with native unit tests (`test/native/run.sh`, 1023 checks),
   so protocol/codec/logic bugs are caught without hardware.
 - **Respect the band.** 868 MHz is duty-limited (~1%); a governor meters every
   transmission and the Marshal scheduler gates all TX.
@@ -20,12 +20,13 @@ the user-facing overview.
 ## Layers
 
 ```
-apps/      36 keyboard-driven screens (each an App subclass)
+apps/      38 keyboard-driven screens (each an App subclass)
 shell/     launcher · screen manager · context (ctx) · net glue · archive FIFO · ble_bridge
 ui/        theme (RGB565 palette) · widgets (header/footer/status bar)
 services/  lora (RadioLib SX1262) · gps (TinyGPSPlus) · storage (NVS+SD) · clock · audio · ir
 proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
-           roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec  (portable, tested)
+           roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec
+           squeeze · defrag · wavfmt · bmp · battlog · ircodes    (portable, tested)
 crypto/    chacha20 · channel · aes · sha256 (HMAC/HKDF)          (portable, tested)
 hal/       pins.h · spi_bus (shared radio+SD mutex)
 ```
@@ -55,11 +56,43 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD | CRC16(2)
 
 - **Types:** TEXT, ACK, BEACON, PING, PONG, TELEMETRY, ALERT, NODEINFO,
   FILECHUNK, TIMESYNC, WAYPOINT, COUNTDOWN.
-- **Flags:** ACK_REQ, ENCRYPTED, MESH, FRAGMENT, HEALTH, LOWPWR.
-- **Version 2** (`PROTO_VERSION`): v2 grew the Pulse health TLV to 7 bytes
-  (+presence). `decode()` rejects other versions → mixed-firmware fails closed.
+- **Flags:** ACK_REQ, ENCRYPTED, MESH, FRAGMENT, HEALTH, LOWPWR, MAC, SQUEEZE
+  (all 8 bits are now allocated).
+- **Version 3** (`PROTO_VERSION`): v2 grew the Pulse health TLV to 7 bytes
+  (+presence); v3 added authentication, compression and fragmentation together
+  (one break instead of three). `decode()` rejects other versions → mixed-firmware
+  fails closed.
 - A non-wire `airTag` byte annotates each frame for Ledger attribution.
-- Payloads on a keyed channel are ChaCha20-encrypted, nonce bound to (src, msgid).
+- Payloads on a keyed channel are ChaCha20-encrypted, nonce bound to (src, msgid),
+  then authenticated — see below.
+
+### v3: authenticate, compress, fragment
+
+The three compose in a fixed order, and the order matters:
+
+**TX** — compress (`squeeze`) → fragment if still over one frame → per fragment:
+encrypt → MAC. **RX** — verify MAC → decrypt → reassemble → decompress.
+
+- **Encrypt-then-MAC** (`crypto/channel.h seal`/`open`). The tag is a truncated
+  8-byte HMAC-SHA256 over a canonical header image plus the length-prefixed
+  ciphertext, under a MAC key derived from a *separate* HKDF info string. `hop` is
+  deliberately excluded: relays rewrite it in flight. Verification is
+  constant-time, happens before decryption, and a keyed frame lacking `FLAG_MAC`
+  is refused outright so a v3 node can't be downgraded to unauthenticated v2
+  behaviour.
+- **Squeeze** (`proto/squeeze.h`) — fixed-dictionary codec, ~48% of original on
+  representative traffic. Compressing *before* encrypting is the right order here
+  (ciphertext is incompressible); the usual CRIME/BREACH caveat about compressing
+  attacker-influenced secrets alongside secrets does not apply to a one-shot
+  operator-composed message.
+- **Defrag** (`proto/defrag.h`) — 4 slots keyed by (src, group), tolerant of
+  out-of-order and duplicate fragments (relayed copies), oldest-slot eviction and
+  a 60 s timeout sweep so a vanished peer can't wedge a slot. The receiver's slot
+  size (`FRAG_BODY_MAX`) is the binding limit on fragment size — the sender clamps
+  to it even on a cleartext channel where the frame itself would allow more.
+- Reassembled messages can exceed one `Frame`, so completed text is delivered
+  through `App::onTextMessage` rather than `onPacket`, and the ACK is sent from the
+  RX choke (once per message, not per fragment) instead of from inside Courier.
 
 ## Key subsystems
 

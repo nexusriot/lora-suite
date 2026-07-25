@@ -17,6 +17,13 @@ int main() {
   run_aes_tests();
   run_sha256_tests();
   run_nec_tests();
+  run_mac_tests();
+  run_squeeze_tests();
+  run_defrag_tests();
+  run_wire3_tests();
+  run_media_tests();
+  run_battlog_tests();
+  run_ircodes_tests();
   run_meshtastic_tests();
   run_payloads_tests();
   run_txqueue_tests();

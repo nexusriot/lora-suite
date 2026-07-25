@@ -6,6 +6,7 @@
 #include "../proto/meshoverlay.h"
 #include "../proto/roster.h"
 #include "../proto/rules.h"
+#include "../proto/ircodes.h"
 #include "../crypto/channel.h"
 #include "archive_log.h"
 
@@ -32,6 +33,7 @@ struct Context {
   Roster     roster;      // durable name<->address contacts
   ArchiveLog archive;     // pending message lines to persist (drained by Archive)
   RuleEngine rules;       // Reflex automation rules
+  IrCodeSet  irCodes;     // user-editable IR remote codes (NVS, phone-editable)
   Channel    channel;     // active channel (id + optional key)
   RadioCfg   cfg;         // active radio profile
 

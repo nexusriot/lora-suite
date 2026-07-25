@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include "ff.h"          // bundled FatFs — f_mkfs() for a real card format
+#include "../proto/bmp.h"
 #include "../hal/pins.h"
 #include "../hal/spi_bus.h"
 
@@ -115,6 +116,55 @@ void Storage::loadWifi(char* ssid, uint8_t ssidCap, char* pass, uint8_t passCap)
 void Storage::saveWifi(const char* ssid, const char* pass) {
   s_prefs.putString("wssid", ssid ? ssid : "");
   s_prefs.putString("wpass", pass ? pass : "");
+}
+
+bool Storage::loadIrCodes(IrCodeSet& s) {
+  size_t sz = s_prefs.getBytesLength("ircodes");
+  if (sz == 0) return false;
+  uint8_t buf[256];
+  if (sz > sizeof(buf)) return false;
+  s_prefs.getBytes("ircodes", buf, sz);
+  return s.deserialize(buf, sz);
+}
+
+void Storage::saveIrCodes(const IrCodeSet& s) {
+  uint8_t buf[256];
+  size_t n = s.serialize(buf, sizeof(buf));
+  if (n) s_prefs.putBytes("ircodes", buf, n);
+}
+
+bool Storage::writeBmp(const char* path, const uint16_t* px, uint32_t w, uint32_t h) {
+  if (!sd_ || !px) return false;
+  SpiBus::Guard g;
+  SD.mkdir("/shots");
+  File f = SD.open(path, FILE_WRITE);
+  if (!f) return false;
+
+  uint8_t hdr[BMP_HEADER_LEN];
+  bmpHeader(hdr, w, h);
+  f.write(hdr, BMP_HEADER_LEN);
+
+  // BMP rows run bottom-up, so walk the framebuffer backwards.
+  uint8_t row[bmpRowBytes(240)];
+  size_t rowLen = bmpRowBytes(w);
+  if (rowLen > sizeof(row)) { f.close(); return false; }
+  for (int32_t y = (int32_t)h - 1; y >= 0; y--) {
+    bmpRow565(px + (size_t)y * w, w, row);
+    f.write(row, rowLen);
+  }
+  f.close();
+  return true;
+}
+
+bool Storage::nextShotPath(char* out, size_t cap) {
+  if (!sd_) return false;
+  SpiBus::Guard g;
+  SD.mkdir("/shots");
+  for (int i = 0; i < 1000; i++) {
+    snprintf(out, cap, "/shots/%03d.bmp", i);
+    if (!SD.exists(out)) return true;
+  }
+  return false;
 }
 
 int Storage::readFile(const char* path, uint8_t* buf, int cap) {

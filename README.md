@@ -1,7 +1,7 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **33** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **38** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
@@ -77,7 +77,9 @@ can never interleave with a radio transaction. See `src/hal/`.
 | DROP | Dropbox | Chunked note/file transfer (stretch app) |
 | SET | Settings | Screen brightness + speaker volume, persisted to NVS (applied live) |
 | SD | SD | microSD status (type / used / free), remount, erase-all wipe, and a real FAT/FAT32 reformat (FatFs `f_mkfs`) |
-| IR | IR | Infrared NEC remote blaster (Power/Vol/Mute/Ch presets) over the IR LED |
+| IR | IR | Programmable NEC remote over the IR LED — codes stored in NVS, editable from the phone app |
+| REC | Memos | Voice memos — records 8 kHz WAV from the ES8311 mic to SD, plays back through the speaker |
+| BATT | Coulomb | Battery history + discharge forecast (time-to-empty) with a graph; logs to `/batt.csv` |
 
 **Cross-cutting (not apps):**
 - **Status bar** — every screen's footer shows duty %, a *seconds-to-next-permitted-TX* countdown, TX-queue depth, unread badge, channel, battery and GPS fix.
@@ -103,11 +105,24 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD(0..200) | CRC
 ```
 
 Types: TEXT ACK BEACON PING PONG TELEMETRY ALERT NODEINFO FILECHUNK TIMESYNC WAYPOINT.
-Flags: ACK_REQ ENCRYPTED MESH FRAGMENT HEALTH LOWPWR. Payloads on a keyed channel
-are ChaCha20-encrypted with a nonce bound to (src, msgid). See `src/proto/frame.h`.
-Wire version **2** (`PROTO_VERSION`) — v2 grew the Pulse health TLV to 7 bytes
-(added presence); `decode()` rejects other versions, so mixed-firmware nodes fail
-closed rather than mis-parsing.
+Flags: ACK_REQ ENCRYPTED MESH FRAGMENT HEALTH LOWPWR MAC SQUEEZE. See `src/proto/frame.h`.
+
+Wire version **3** (`PROTO_VERSION`); `decode()` rejects other versions, so
+mixed-firmware nodes fail closed rather than mis-parsing. v3 added:
+
+- **Authentication** — keyed channels are *encrypt-then-MAC*: an 8-byte truncated
+  HMAC-SHA256 tag (`FLAG_MAC`) over the header + ciphertext, keyed by an HKDF
+  branch separate from the cipher key. `hop` is excluded so relays can still
+  decrement it. A keyed frame that fails verification is dropped before any app
+  sees it — ChaCha20 alone is malleable, so without this a flipped ciphertext bit
+  silently flipped the plaintext.
+- **Compression** — `FLAG_SQUEEZE` marks a Squeeze-compressed body (a smaz-style
+  fixed dictionary, `src/proto/squeeze.h`). Typical field messages pack to about
+  half size, doubling the words per duty-cycle budget. Applied before encryption.
+- **Fragmentation** — `FLAG_FRAGMENT` is now implemented: a 3-byte
+  (group, index, total) header lets a message up to `TEXT_MAX` (480 chars) span up
+  to 4 frames, reassembled by `src/proto/defrag.h` with out-of-order/duplicate
+  tolerance and a 60 s timeout. Only the last fragment requests an ACK.
 
 ## Meshtastic interoperability
 
@@ -174,12 +189,14 @@ against a C-encoded golden frame.
 ```
 src/
   proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
-             roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec  (portable, tested)
+             roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec
+             squeeze (compression) · defrag (fragment reassembly)
+             wavfmt · bmp · battlog · ircodes                             (portable, tested)
   crypto/    chacha20 · channel · aes · sha256 (HMAC/HKDF)                  (portable, tested)
   services/  lora · gps · storage · clock · audio · ir                     (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      36 apps                                                       (device)
+  apps/      38 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/    host unit tests (g++)

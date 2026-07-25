@@ -39,32 +39,55 @@ static void transform(uint32_t st[8], const uint8_t block[64]) {
   st[0]+=a; st[1]+=b; st[2]+=c; st[3]+=d; st[4]+=e; st[5]+=f; st[6]+=g; st[7]+=h;
 }
 
-void sha256(const uint8_t* data, size_t len, uint8_t out[32]) {
-  uint32_t st[8] = {0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
-  uint8_t block[64];
-  size_t i = 0;
-  while (len - i >= 64) { transform(st, data + i); i += 64; }
+void sha256_init(Sha256Ctx& c) {
+  c.st[0]=0x6a09e667; c.st[1]=0xbb67ae85; c.st[2]=0x3c6ef372; c.st[3]=0xa54ff53a;
+  c.st[4]=0x510e527f; c.st[5]=0x9b05688c; c.st[6]=0x1f83d9ab; c.st[7]=0x5be0cd19;
+  c.buffered = 0;
+  c.total = 0;
+}
 
-  size_t rem = len - i;
-  std::memcpy(block, data + i, rem);
-  block[rem] = 0x80;
-  if (rem >= 56) {
-    std::memset(block + rem + 1, 0, 64 - rem - 1);
-    transform(st, block);
-    std::memset(block, 0, 56);
-  } else {
-    std::memset(block + rem + 1, 0, 56 - rem - 1);
+void sha256_update(Sha256Ctx& c, const uint8_t* data, size_t len) {
+  c.total += len;
+  if (c.buffered) {                       // top up the partial block first
+    size_t need = 64 - c.buffered;
+    size_t take = len < need ? len : need;
+    std::memcpy(c.buf + c.buffered, data, take);
+    c.buffered += take;
+    data += take;
+    len -= take;
+    if (c.buffered == 64) { transform(c.st, c.buf); c.buffered = 0; }
   }
-  uint64_t bits = (uint64_t)len * 8;
-  for (int j = 0; j < 8; j++) block[56 + j] = (uint8_t)(bits >> (56 - 8*j));
-  transform(st, block);
+  while (len >= 64) { transform(c.st, data); data += 64; len -= 64; }
+  if (len) { std::memcpy(c.buf, data, len); c.buffered = len; }
+}
+
+void sha256_final(Sha256Ctx& c, uint8_t out[32]) {
+  uint64_t bits = c.total * 8;
+  size_t rem = c.buffered;
+  c.buf[rem] = 0x80;
+  if (rem >= 56) {
+    std::memset(c.buf + rem + 1, 0, 64 - rem - 1);
+    transform(c.st, c.buf);
+    std::memset(c.buf, 0, 56);
+  } else {
+    std::memset(c.buf + rem + 1, 0, 56 - rem - 1);
+  }
+  for (int j = 0; j < 8; j++) c.buf[56 + j] = (uint8_t)(bits >> (56 - 8*j));
+  transform(c.st, c.buf);
 
   for (int j = 0; j < 8; j++) {
-    out[j*4]   = (uint8_t)(st[j] >> 24);
-    out[j*4+1] = (uint8_t)(st[j] >> 16);
-    out[j*4+2] = (uint8_t)(st[j] >> 8);
-    out[j*4+3] = (uint8_t)(st[j]);
+    out[j*4]   = (uint8_t)(c.st[j] >> 24);
+    out[j*4+1] = (uint8_t)(c.st[j] >> 16);
+    out[j*4+2] = (uint8_t)(c.st[j] >> 8);
+    out[j*4+3] = (uint8_t)(c.st[j]);
   }
+}
+
+void sha256(const uint8_t* data, size_t len, uint8_t out[32]) {
+  Sha256Ctx c;
+  sha256_init(c);
+  sha256_update(c, data, len);
+  sha256_final(c, out);
 }
 
 void hmac_sha256(const uint8_t* key, size_t keyLen, const uint8_t* msg, size_t msgLen, uint8_t out[32]) {
@@ -75,22 +98,18 @@ void hmac_sha256(const uint8_t* key, size_t keyLen, const uint8_t* msg, size_t m
   uint8_t ipad[64], opad[64];
   for (int i = 0; i < 64; i++) { ipad[i] = k[i] ^ 0x36; opad[i] = k[i] ^ 0x5c; }
 
-  // inner = SHA256(ipad || msg)
+  // inner = SHA256(ipad || msg), streamed so msg length is unbounded
   uint8_t inner[32];
-  {
-    // stream: concatenate ipad + msg into a temp is wasteful; hash incrementally via a scratch.
-    // Simpler: build a buffer. Messages here are small (<= a few hundred bytes).
-    uint8_t buf[64 + 256];
-    size_t n = msgLen > 256 ? 256 : msgLen;     // callers keep msg short (HKDF blocks)
-    std::memcpy(buf, ipad, 64);
-    std::memcpy(buf + 64, msg, n);
-    sha256(buf, 64 + n, inner);
-  }
-  // out = SHA256(opad || inner)
-  uint8_t buf[64 + 32];
-  std::memcpy(buf, opad, 64);
-  std::memcpy(buf + 64, inner, 32);
-  sha256(buf, 96, out);
+  Sha256Ctx c;
+  sha256_init(c);
+  sha256_update(c, ipad, 64);
+  sha256_update(c, msg, msgLen);
+  sha256_final(c, inner);
+
+  sha256_init(c);
+  sha256_update(c, opad, 64);
+  sha256_update(c, inner, 32);
+  sha256_final(c, out);
 }
 
 void hkdf_sha256(const uint8_t* salt, size_t saltLen,

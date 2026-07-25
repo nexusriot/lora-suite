@@ -11,6 +11,7 @@
 #include "../services/storage.h"
 #include "../services/audio.h"
 #include "../services/clock.h"
+#include "../services/ir.h"
 
 namespace ls {
 namespace ble {
@@ -47,9 +48,10 @@ static void pushChunks(const char* buf, size_t n) {
   }
 }
 
-// Serialize a JSON doc, append '\n' as the line delimiter, and notify.
+// Serialize a JSON doc, append '\n' as the line delimiter, and notify. Sized for
+// the largest event: a full TEXT_MAX message plus its JSON envelope.
 static void pushDoc(JsonDocument& d) {
-  char buf[256];
+  char buf[TEXT_MAX + 128];
   size_t n = serializeJson(d, buf, sizeof(buf) - 2);
   buf[n++] = '\n';
   pushChunks(buf, n);
@@ -86,6 +88,20 @@ static void pushStatus() {
   d["unread"] = ctx.unread;
   d["duty"] = (uint8_t)(ctx.lora ? ctx.lora->duty().usedFraction(millis()) * 100.0 : 0.0);
   pushDoc(d);
+}
+
+// Push the user's IR code table as a series of `ir` events.
+static void pushIrCodes() {
+  for (size_t i = 0; i < ctx.irCodes.size(); i++) {
+    const IrCode& c = ctx.irCodes.at(i);
+    JsonDocument d;
+    d["e"] = "ir";
+    d["i"] = (uint8_t)i;
+    d["label"] = c.label;
+    d["addr"] = c.addr;
+    d["cmd"] = c.cmd;
+    pushDoc(d);
+  }
 }
 
 // Push the durable contact roster as a series of `ct` events.
@@ -194,8 +210,7 @@ static void handleCmd(const char* json) {
     const char* t = d["t"] | "";
     if (t[0]) {
       uint16_t dst = (uint16_t)strtol(to, nullptr, 16);
-      Frame f = makeText(dst, t, dst != ADDR_BROADCAST);
-      netSend(f);
+      netSendText(dst, t, dst != ADDR_BROADCAST);   // compresses + fragments
     }
   } else if (!std::strcmp(c, "get")) {
     const char* w = d["w"] | "";
@@ -203,6 +218,7 @@ static void handleCmd(const char* json) {
     else if (!std::strcmp(w, "nodes")) pushNodes();
     else if (!std::strcmp(w, "mesh")) pushMesh();
     else if (!std::strcmp(w, "roster")) pushRoster();
+    else if (!std::strcmp(w, "ir")) pushIrCodes();
   } else if (!std::strcmp(c, "cfg")) {
     applyCfg(d);
   } else if (!std::strcmp(c, "ntp")) {
@@ -247,6 +263,24 @@ static void handleCmd(const char* json) {
       Frame f = makeCountdown(unix, code);
       netSend(f);
       ctx.cdTarget = unix; ctx.cdCode = code; ctx.cdFrom = ctx.myAddr; ctx.cdFired = false;
+    }
+  } else if (!std::strcmp(c, "irset")) {
+    // Add or overwrite one code; index past the end appends.
+    int i = d["i"] | (int)ctx.irCodes.size();
+    ctx.irCodes.set((size_t)i, d["label"] | "code",
+                    (uint8_t)(d["addr"] | 0), (uint8_t)(d["cmd"] | 0));
+    if (ctx.store) ctx.store->saveIrCodes(ctx.irCodes);
+    pushIrCodes();
+  } else if (!std::strcmp(c, "irdel")) {
+    ctx.irCodes.remove((size_t)(d["i"] | -1));
+    if (ctx.store) ctx.store->saveIrCodes(ctx.irCodes);
+    pushIrCodes();
+  } else if (!std::strcmp(c, "irsend")) {
+    int i = d["i"] | -1;
+    if (i >= 0 && i < (int)ctx.irCodes.size()) {
+      const IrCode& c2 = ctx.irCodes.at((size_t)i);
+      ir::init();
+      ir::sendNEC(c2.addr, c2.cmd);
     }
   } else if (!std::strcmp(c, "meshtx")) {
     bool ok = (d["pos"] | 0) ? meshtasticSendPosition() : meshtasticSendText(d["t"] | "");

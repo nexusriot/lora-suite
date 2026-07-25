@@ -11,8 +11,8 @@ The ESP32-S3 is **BLE-only** (no Classic Bluetooth / SPP). The firmware exposes 
 Nordic UART Service (NUS) GATT peripheral; this app connects to it and exchanges
 **newline-delimited JSON**:
 
-- **commands → device:** `{"c":"tx","to":"FFFF","t":"hi"}`, `{"c":"get","w":"nodes|mesh|status|roster"}`, `{"c":"cfg",...}`, `{"c":"pres","p":2}`, `{"c":"beacon"}`, `{"c":"ping","to":"1A2B"}`, `{"c":"alert","label":"HELP"}`, `{"c":"distress"}`, `{"c":"countdown","secs":60}`, `{"c":"gw","on":1}`, `{"c":"meshtx","t":"hi"}`, `{"c":"ntp"}`
-- **events → phone:** `{"e":"msg"}`, `{"e":"st"}` (status), `{"e":"nd"}` (node), `{"e":"ct"}` (contact), `{"e":"mn"}` (Meshtastic node), `{"e":"ntp"}`, `{"e":"meshtx"}`
+- **commands → device:** `{"c":"tx","to":"FFFF","t":"hi"}`, `{"c":"get","w":"nodes|mesh|status|roster"}`, `{"c":"cfg",...}`, `{"c":"pres","p":2}`, `{"c":"beacon"}`, `{"c":"ping","to":"1A2B"}`, `{"c":"alert","label":"HELP"}`, `{"c":"distress"}`, `{"c":"countdown","secs":60}`, `{"c":"gw","on":1}`, `{"c":"meshtx","t":"hi"}`, `{"c":"ntp"}`, `{"c":"get","w":"ir"}`, `{"c":"irset","i":0,"label":"TV","addr":4,"cmd":8}`, `{"c":"irdel","i":0}`, `{"c":"irsend","i":0}`
+- **events → phone:** `{"e":"msg"}`, `{"e":"st"}` (status), `{"e":"nd"}` (node), `{"e":"ct"}` (contact), `{"e":"mn"}` (Meshtastic node), `{"e":"ntp"}`, `{"e":"meshtx"}`, `{"e":"ir"}` (IR code)
 
 On the device: open the **Bluetooth** (`BT`) app and press Enter to enable the
 bridge, then Scan + connect here.
@@ -28,6 +28,7 @@ Android convention):
 - **Fleet** — live status (GPS / battery / duty / power / channel), the node table with per-node **Ping**, and your own **presence** selector.
 - **Mesh** — the foreign Meshtastic nodes the device has scanned (MeshScan), plus send text / your GPS position **into** the Meshtastic public channel.
 - **Ops** — one-tap actions: GPS **beacon**, **ping**, **alert** pager, mesh **countdown**, **gateway** toggle, and a confirm-gated **distress / mayday**.
+- **Remote** — program the device's **IR remote**: list / add / edit / delete NEC codes (stored in the device's NVS) and tap one to transmit it.
 - **Config** (gear) — callsign, address, region, brightness, volume, channel **PSK**, WiFi credentials, and an **NTP** time-sync.
 
 ## Build

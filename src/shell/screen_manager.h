@@ -16,6 +16,7 @@ public:
   void onKey(const KeyEvent& k);
   void onPacket(const Frame& f, const RxMeta& m);   // channel-matched, decrypted
   void onRaw(const Frame& f, const RxMeta& m);       // every frame heard
+  void onTextMessage(uint16_t src, const char* text, uint16_t len, const RxMeta& m);
   void update();
   void draw(M5Canvas& g);
 

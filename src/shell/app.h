@@ -38,6 +38,11 @@ public:
   virtual void onKey(const KeyEvent&) {}
   virtual void onPacket(const Frame&, const RxMeta&) {}  // frames on our channel
   virtual void onRawPacket(const Frame&, const RxMeta&) {} // every frame (Monitor)
+  // A complete text message, already reassembled from fragments and decompressed.
+  // Delivered separately from onPacket because a reassembled message can be
+  // longer than a single Frame's payload. `text` is NUL-terminated.
+  virtual void onTextMessage(uint16_t /*src*/, const char* /*text*/, uint16_t /*len*/,
+                             const RxMeta&) {}
   virtual void update() {}                                // only while foreground
   virtual void background() {}                            // every loop, foreground or not
   virtual bool consumesText() const { return false; }     // true while capturing typed text

@@ -5,7 +5,9 @@
 namespace ls {
 
 constexpr uint8_t  PROTO_MAGIC    = 0x4C;   // 'L'
-constexpr uint8_t  PROTO_VERSION  = 2;      // v2: Pulse health TLV grew to 7 bytes (+presence)
+// v3: keyed channels carry an HMAC tag (FLAG_MAC), TEXT may be dictionary-compressed
+// (FLAG_SQUEEZE), and FLAG_FRAGMENT is now implemented (3-byte fragment header).
+constexpr uint8_t  PROTO_VERSION  = 3;
 constexpr size_t   HEADER_LEN     = 13;
 constexpr size_t   CRC_LEN        = 2;
 constexpr size_t   MAX_PAYLOAD    = 200;
@@ -32,10 +34,26 @@ enum Flags : uint8_t {
   FLAG_ACK_REQ   = 0x01,
   FLAG_ENCRYPTED = 0x02,
   FLAG_MESH      = 0x04,
-  FLAG_FRAGMENT  = 0x08,
+  FLAG_FRAGMENT  = 0x08,   // payload starts with a 3-byte FragHeader
   FLAG_HEALTH    = 0x10,   // a Pulse health TLV is appended after the body
   FLAG_LOWPWR    = 0x20,   // sender is in a degraded/survival power state
+  FLAG_MAC       = 0x40,   // an 8-byte HMAC tag is appended after the body
+  FLAG_SQUEEZE   = 0x80,   // body is Squeeze-compressed (TEXT only)
 };
+
+// Truncated HMAC-SHA256 tag appended to keyed-channel payloads. 8 bytes is a
+// deliberate airtime/strength trade: a 2^-64 forgery chance per try, and an
+// attacker gets no oracle faster than the 1% duty cycle allows.
+constexpr size_t MAC_LEN = 8;
+
+// Fragment header (present when FLAG_FRAGMENT): group id, index, total.
+constexpr size_t FRAG_HDR_LEN = 3;
+constexpr uint8_t MAX_FRAGMENTS = 4;
+
+// Longest text a user can compose or receive. Beyond one frame's worth it is
+// compressed and, if still too big, split across fragments. Capped well under
+// the reassembly ceiling so even incompressible text always fits.
+constexpr size_t TEXT_MAX = 480;
 
 // ALERT payload[0] codes above the user pager range are reserved for the system.
 constexpr uint8_t ALERT_DISTRESS = 0xE0;  // Mayday distress last-will

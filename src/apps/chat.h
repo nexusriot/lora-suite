@@ -40,13 +40,9 @@ public:
     }
   }
 
-  void onPacket(const Frame& f, const RxMeta& m) override {
-    if (f.type != MSG_TEXT) return;
-    char body[41];
-    uint8_t n = f.len < 40 ? f.len : 40;
-    std::memcpy(body, f.payload, n);
-    body[n] = 0;
-    add(f.src, body, m.rssi);
+  // Already reassembled + decompressed by the shell.
+  void onTextMessage(uint16_t src, const char* text, uint16_t, const RxMeta& m) override {
+    add(src, text, m.rssi);
   }
 
   void draw(M5Canvas& g) override {
@@ -54,20 +50,38 @@ public:
     ui::header(g, *this);
     g.setTextSize(1);
 
+    // Wrap long messages, filling the visible rows from the newest backwards.
     int y = ui::BODY_Y + 2;
-    int start = count_ > ROWS ? count_ - ROWS : 0;
-    for (int i = start; i < count_; i++) {
+    char rows[ROWS][COLS + 1];
+    uint16_t rowSrc[ROWS];
+    int nrows = 0;
+    for (int i = count_ - 1; i >= 0 && nrows < ROWS; i--) {
       const Msg& mm = log_[i % RING];
-      char line[48];
+      char full[Msg::CAP + 16];
       if (mm.src == ctx.myAddr) {
-        std::snprintf(line, sizeof(line), "me> %s", mm.text);
+        std::snprintf(full, sizeof(full), "me> %s", mm.text);
       } else {
         char tmp[14];
-        const char* lbl = ctx.roster.label(mm.src, tmp, sizeof(tmp));
-        std::snprintf(line, sizeof(line), "%s> %s", lbl, mm.text);
+        std::snprintf(full, sizeof(full), "%s> %s", ctx.roster.label(mm.src, tmp, sizeof(tmp)), mm.text);
       }
-      g.setTextColor(mm.src == ctx.myAddr ? theme::ACCENT : theme::TEXT, theme::BG);
-      g.drawString(line, 6, y);
+      int len = (int)std::strlen(full);
+      int chunks = (len + COLS - 1) / COLS;
+      if (chunks < 1) chunks = 1;
+      for (int c = chunks - 1; c >= 0 && nrows < ROWS; c--) {
+        int off = c * COLS;
+        int n = len - off;
+        if (n > COLS) n = COLS;
+        if (n < 0) n = 0;
+        std::memcpy(rows[nrows], full + off, n);
+        rows[nrows][n] = 0;
+        rowSrc[nrows] = mm.src;
+        nrows++;
+      }
+    }
+
+    for (int i = nrows - 1; i >= 0; i--) {
+      g.setTextColor(rowSrc[i] == ctx.myAddr ? theme::ACCENT : theme::TEXT, theme::BG);
+      g.drawString(rows[i], 6, y);
       y += 10;
     }
 
@@ -76,32 +90,38 @@ public:
     g.setTextColor(theme::MUTED, theme::BG);
     g.drawString(">", 6, iy);
     g.setTextColor(theme::TEXT, theme::BG);
-    g.drawString(input_, 18, iy);
+    const int VIS = 38;
+    g.drawString(len_ > VIS ? input_ + (len_ - VIS) : input_, 18, iy);
     ui::footer(g);
   }
 
 private:
-  struct Msg { uint16_t src; char text[41]; int16_t rssi; };
-  static const int RING = 24;
+  struct Msg {
+    static const int CAP = 160;
+    uint16_t src;
+    char text[CAP + 1];
+    int16_t rssi;
+  };
+  static const int RING = 16;
   static const int ROWS = 9;
+  static const int COLS = 44;
   Msg log_[RING] = {};
   int count_ = 0;
-  char input_[64] = {0};
+  char input_[TEXT_MAX + 1] = {0};
   int len_ = 0;
 
   void add(uint16_t src, const char* text, int16_t rssi) {
     Msg& m = log_[count_ % RING];
     m.src = src;
-    std::strncpy(m.text, text, sizeof(m.text) - 1);
-    m.text[sizeof(m.text) - 1] = 0;
+    std::strncpy(m.text, text, Msg::CAP);
+    m.text[Msg::CAP] = 0;
     m.rssi = rssi;
     count_++;
   }
 
   void send() {
     if (!len_) return;
-    Frame f = makeText(ADDR_BROADCAST, input_, false);
-    if (netSend(f)) {
+    if (netSendText(ADDR_BROADCAST, input_, false)) {
       add(ctx.myAddr, input_, 0);
       char t[9];
       if (ctx.clock) ctx.clock->hms(t); else t[0] = 0;

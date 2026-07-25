@@ -4,6 +4,8 @@
 #include "proto/frame.h"
 #include "proto/payloads.h"
 #include "proto/dedup.h"
+#include "proto/defrag.h"
+#include "proto/squeeze.h"
 #include "shell/context.h"
 #include "shell/net.h"
 #include "shell/screen_manager.h"
@@ -47,6 +49,8 @@
 #include "apps/settings.h"
 #include "apps/sdutils.h"
 #include "apps/ir_blaster.h"
+#include "apps/recorder.h"
+#include "apps/coulomb.h"
 #include "apps/ledger.h"
 #include "apps/reflex.h"
 #include "apps/reactor.h"
@@ -91,6 +95,8 @@ static Bluetooth   bluetooth;
 static Settings    settingsApp;
 static SdUtils     sdUtils;
 static IrBlaster   irBlaster;
+static Recorder    recorder;
+static Coulomb     coulomb;
 static Ledger      ledgerApp;
 static Reflex      reflexApp;
 static Reactor     reactor;
@@ -101,13 +107,14 @@ static Dropbox    dropbox;
 static App* apps[] = {
     &courier, &chat, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &gpsApp, &radar,
     &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &meshChat, &monitor, &ranger, &chronos, &countdownApp,
-    &console, &gateway, &probe, &wifiScan, &bluetooth, &settingsApp, &sdUtils, &irBlaster, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
+    &console, &gateway, &probe, &wifiScan, &bluetooth, &settingsApp, &sdUtils, &irBlaster, &recorder, &coulomb, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
 static const int APP_COUNT = sizeof(apps) / sizeof(apps[0]);
 
 static ScreenManager sm;
 static Launcher launcher(apps, APP_COUNT, &sm);
 static Dedup relayDedup;
 static Dedup rxDedup;    // separate: dedups archive/unread per message (not the relay gate)
+static Defrag defrag;    // reassembles multi-fragment text messages
 static M5Canvas canvas(&M5Cardputer.Display);
 
 // Gateway/Uplink: re-encode a heard frame to its on-air bytes and stream it out
@@ -123,6 +130,49 @@ static void emitGateway(const Frame& f, const RxMeta& m) {
   for (size_t i = 0; i < n; i++) printf("%02x", buf[i]);
   printf("\"}\n");
   ctx.gatewaySent++;
+}
+
+// A TEXT frame's body, once decrypted: reassemble it if fragmented, decompress
+// it if squeezed, then deliver the whole message. Fragments produce nothing until
+// the last piece lands. `wire` is the original frame (for ACK addressing).
+static void receiveText(const Frame& wire, const Frame& local, const RxMeta& m) {
+  const uint8_t* body = local.payload;
+  size_t bodyLen = local.len;                  // reassembled length can exceed a frame
+
+  if (local.flags & FLAG_FRAGMENT) {
+    FragHeader h;
+    if (!parseFragHeader(body, local.len, h)) return;
+    if (!defrag.offer(wire.src, h, body + FRAG_HDR_LEN, (uint8_t)(local.len - FRAG_HDR_LEN), m.when))
+      return;                                  // still waiting on other fragments
+    body = defrag.data();
+    bodyLen = defrag.size();
+  }
+
+  char text[TEXT_MAX + 1];
+  size_t n;
+  if (local.flags & FLAG_SQUEEZE) {
+    n = unsqueeze(body, bodyLen, (uint8_t*)text, TEXT_MAX);
+    if (n == 0) return;                        // malformed compressed stream: drop
+  } else {
+    n = bodyLen > TEXT_MAX ? TEXT_MAX : bodyLen;
+    memcpy(text, body, n);
+  }
+  text[n] = 0;
+
+  ctx.unread++;
+  char t[9];
+  clk.hms(t);
+  ctx.archive.add(t, 'I', wire.src, text);        // persist received text (Archive)
+  ble::onRadioText(wire.src, text, m.rssi);       // mirror to the phone bridge
+  sm.onTextMessage(wire.src, text, (uint16_t)n, m);
+
+  // ACK at the RX choke rather than inside one app, so an addressed message is
+  // confirmed no matter which screen is open (and once per message, not per
+  // fragment — only the last fragment carries FLAG_ACK_REQ).
+  if ((wire.flags & FLAG_ACK_REQ) && wire.dst == ctx.myAddr) {
+    Frame a = makeAck(wire.src, wire.msgid);
+    netSend(a, true);
+  }
 }
 
 // Every decoded frame off the air: node table, monitor tap, mesh relay (on the
@@ -149,7 +199,9 @@ static void onRadioFrame(Frame& f, const RxMeta& m) {
 
   if (f.chan != ctx.channel.id()) return;
   Frame local = f;
-  if (local.flags & FLAG_ENCRYPTED) ctx.channel.apply(local);
+  // Verify-then-decrypt. A keyed frame that fails authentication is forged or
+  // corrupted, so it is dropped here and never reaches an app.
+  if (!ctx.channel.open(local)) return;
 
   if ((local.flags & FLAG_HEALTH) && local.len >= HEALTH_LEN) {
     Health h;
@@ -195,17 +247,8 @@ static void onRadioFrame(Frame& f, const RxMeta& m) {
     }
     case MSG_TEXT:
       // dedup across relayed copies so a message is archived / counted once
-      if (f.src != ctx.myAddr && !rxDedup.seen(f.src, f.msgid, m.when)) {
-        ctx.unread++;
-        char body[41];
-        uint8_t bn = local.len < 40 ? local.len : 40;
-        memcpy(body, local.payload, bn);
-        body[bn] = 0;
-        char t[9];
-        clk.hms(t);
-        ctx.archive.add(t, 'I', f.src, body);   // persist received text (Archive)
-        ble::onRadioText(f.src, body, m.rssi);  // mirror to the phone bridge
-      }
+      if (f.src != ctx.myAddr && !rxDedup.seen(f.src, f.msgid, m.when))
+        receiveText(f, local, m);
       break;
     case MSG_ALERT:
       if (local.len >= 1 && local.payload[0] == ALERT_DISTRESS) {
@@ -229,6 +272,37 @@ static void onRadioFrame(Frame& f, const RxMeta& m) {
     runRuleAction(ra);
 }
 
+// Screenshots are taken right after the frame is pushed, so the file matches
+// exactly what was on screen when the key was pressed.
+static bool shotPending = false;
+
+static void takeScreenshot() {
+  if (!ctx.store || !ctx.store->sdReady()) return;
+  char path[32];
+  if (!ctx.store->nextShotPath(path, sizeof(path))) return;
+  const uint16_t* px = (const uint16_t*)canvas.getBuffer();
+  if (!px) return;
+  if (ctx.store->writeBmp(path, px, ui::SCREEN_W, ui::SCREEN_H)) audio::tick();
+}
+
+// Keys the shell claims before any app sees them. Both keyboard paths funnel
+// through here. Everything is gated on consumesText() so these characters stay
+// typeable while an app is capturing text, and can't fire by accident.
+static bool handleGlobalKey(const KeyEvent& ev) {
+  if (!ev.ch || (sm.top() && sm.top()->consumesText())) return false;
+  if (ev.ch == '\\') {
+    // panic() only arms a confirm prompt; it does not transmit until Enter.
+    if (sm.top() != &mayday) sm.push(&mayday);
+    mayday.panic();
+    return true;
+  }
+  if (ev.ch == '=') {
+    shotPending = true;
+    return true;
+  }
+  return false;
+}
+
 static void translateKeys() {
   if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) return;
   auto st = M5Cardputer.Keyboard.keysState();
@@ -248,14 +322,7 @@ static void translateKeys() {
       default:  ev.ch = c; break;
     }
   }
-  // Global distress hotkey — but never while an app is capturing typed text (so
-  // '\' stays typeable there and can't fire by accident). panic() only arms a
-  // confirm prompt; it does not transmit until the user presses Enter.
-  if (ev.ch == '\\' && !(sm.top() && sm.top()->consumesText())) {
-    if (sm.top() != &mayday) sm.push(&mayday);
-    mayday.panic();
-    return;
-  }
+  if (handleGlobalKey(ev)) return;
   sm.onKey(ev);
 }
 
@@ -300,11 +367,7 @@ static void pollKeyboardAdv() {
         if (c >= 0x20 && c < 0x7f) ev.ch = (char)c; else continue;
         break;
     }
-    if (ev.ch == '\\' && !(sm.top() && sm.top()->consumesText())) {
-      if (sm.top() != &mayday) sm.push(&mayday);
-      mayday.panic();
-      continue;
-    }
+    if (handleGlobalKey(ev)) continue;
     sm.onKey(ev);
   }
   if (any) M5.In_I2C.writeRegister8(ADDR, 0x02, 0x01, 400000);   // clear K_INT status
@@ -338,6 +401,7 @@ void setup() {
   }
   storage.loadRoster(ctx.roster);
   storage.loadRules(ctx.rules);
+  if (!storage.loadIrCodes(ctx.irCodes)) ctx.irCodes.loadDefaults();
 
   char psk[24] = {0};
   if (storage.loadProfile(storage.activeSlot(), ctx.cfg, psk, sizeof(psk)) && psk[0])
@@ -383,10 +447,13 @@ void loop() {
     ctx.pendingPeer = ADDR_BROADCAST;   // drop any unconsumed handoff
   }
 
+  defrag.sweep(millis());   // reclaim reassemblies whose sender went away
+
   for (int i = 0; i < APP_COUNT; i++) apps[i]->background();   // background services
 
   sm.update();
   sm.draw(canvas);
   canvas.pushSprite(0, 0);
+  if (shotPending) { shotPending = false; takeScreenshot(); }
   delay(10);
 }

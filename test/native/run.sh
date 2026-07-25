@@ -15,6 +15,12 @@ g++ -std=c++17 -O2 -Wall -Wextra \
   "$root"/src/proto/protobuf_lite.cpp \
   "$root"/src/proto/meshtastic.cpp \
   "$root"/src/proto/payloads.cpp \
+  "$root"/src/proto/squeeze.cpp \
+  "$root"/src/proto/defrag.cpp \
+  "$root"/src/proto/wavfmt.cpp \
+  "$root"/src/proto/bmp.cpp \
+  "$root"/src/proto/battlog.cpp \
+  "$root"/src/proto/ircodes.cpp \
   "$root"/src/proto/roster.cpp \
   "$root"/src/proto/solar.cpp \
   "$root"/src/crypto/chacha20.cpp \

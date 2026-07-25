@@ -8,7 +8,7 @@ import "fmt"
 
 const (
 	MagicL        = 0x4C // 'L'
-	Version       = 2
+	Version       = 3
 	HeaderLen     = 13
 	CRCLen        = 2
 	MaxPayload    = 200
@@ -40,6 +40,8 @@ const (
 	FlagFragment  = 0x08
 	FlagHealth    = 0x10
 	FlagLowPwr    = 0x20
+	FlagMac       = 0x40
+	FlagSqueeze   = 0x80
 )
 
 type Frame struct {
@@ -163,6 +165,7 @@ func FlagString(fl uint8) string {
 	}{
 		{FlagAckReq, "ACK"}, {FlagEncrypted, "ENC"}, {FlagMesh, "MESH"},
 		{FlagFragment, "FRAG"}, {FlagHealth, "HEALTH"}, {FlagLowPwr, "LOWPWR"},
+		{FlagMac, "MAC"}, {FlagSqueeze, "SQZ"},
 	}
 	out := ""
 	for _, n := range names {

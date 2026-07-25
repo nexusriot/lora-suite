@@ -9,6 +9,8 @@
 #include "../services/audio.h"
 #include "../services/clock.h"
 #include "../proto/meshtastic.h"
+#include "../proto/squeeze.h"
+#include "../proto/defrag.h"
 #include <WiFi.h>
 #include <time.h>
 
@@ -58,11 +60,75 @@ bool netSend(Frame& f, bool urgent) {
   if (f.hop == 0) f.hop = ctx.relayHops;
   if (ctx.power >= PWR_SURVIVAL) f.flags |= FLAG_LOWPWR;
   maybeAppendHealth(f);
-  if (ctx.channel.encrypted() && f.len) {
-    f.flags |= FLAG_ENCRYPTED;
-    ctx.channel.apply(f);   // encrypt in place (nonce binds src+msgid, set above)
-  }
+  // Encrypt-then-MAC (nonce + tag both bind src+msgid, set above). A body too
+  // large to carry its tag is refused rather than sent unauthenticated.
+  if (!ctx.channel.seal(f)) return false;
   return ctx.lora && ctx.lora->sendFrame(f, urgent);
+}
+
+bool netSendText(uint16_t dst, const char* text, bool wantAck) {
+  size_t n = strnlen(text, TEXT_MAX);
+  if (n == 0) return false;
+
+  // Compress first: it shrinks what has to be encrypted, tagged and fragmented.
+  uint8_t body[TEXT_MAX];
+  size_t bodyLen = n;
+  bool squeezed = false;
+  {
+    uint8_t comp[TEXT_MAX];
+    size_t cn = 0;
+    if (squeezeIfSmaller((const uint8_t*)text, n, comp, sizeof(comp), cn)) {
+      memcpy(body, comp, cn);
+      bodyLen = cn;
+      squeezed = true;
+    } else {
+      memcpy(body, text, n);
+    }
+  }
+
+  size_t budget = MAX_PAYLOAD;
+  if (ctx.channel.encrypted()) budget -= MAC_LEN;   // leave room for the tag
+  uint8_t base = FLAG_MESH | (squeezed ? FLAG_SQUEEZE : 0);
+
+  if (bodyLen <= budget) {
+    Frame f;
+    f.type = MSG_TEXT;
+    f.dst = dst;
+    f.flags = base | (wantAck ? FLAG_ACK_REQ : 0);
+    f.setPayload(body, (uint8_t)bodyLen);
+    return netSend(f);
+  }
+
+  // The receiver's per-fragment slot is the real ceiling, and it is sized for the
+  // worst case (tag present). On a cleartext channel the frame would allow more,
+  // but sending more would overrun the reassembler and the message would vanish.
+  size_t per = budget - FRAG_HDR_LEN;
+  if (per > FRAG_BODY_MAX) per = FRAG_BODY_MAX;
+  size_t total = (bodyLen + per - 1) / per;
+  if (total > MAX_FRAGMENTS) return false;
+
+  static uint8_t group = 0;
+  group++;
+  bool ok = true;
+  for (size_t i = 0; i < total; i++) {
+    size_t off = i * per;
+    size_t chunk = (bodyLen - off < per) ? (bodyLen - off) : per;
+    uint8_t p[MAX_PAYLOAD];
+    p[0] = group;
+    p[1] = (uint8_t)i;
+    p[2] = (uint8_t)total;
+    memcpy(p + FRAG_HDR_LEN, body + off, chunk);
+
+    Frame f;
+    f.type = MSG_TEXT;
+    f.dst = dst;
+    // Only the final fragment asks for an ACK — one ACK per message, and it
+    // implicitly confirms the whole thing reassembled.
+    f.flags = base | FLAG_FRAGMENT | ((wantAck && i + 1 == total) ? FLAG_ACK_REQ : 0);
+    f.setPayload(p, (uint8_t)(FRAG_HDR_LEN + chunk));
+    if (!netSend(f)) ok = false;
+  }
+  return ok;
 }
 
 Frame makeText(uint16_t dst, const char* text, bool wantAck) {

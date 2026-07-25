@@ -8,7 +8,7 @@ import (
 // Golden frame produced by the C encoder (src/proto/frame.cpp):
 //
 //	type=TEXT flags=ACK_REQ chan=0 hop=3 src=0x1234 dst=0xABCD msgid=7 payload="hi"
-const goldenHex = "4c02010100033412cdab0700026869f4cb"
+const goldenHex = "4c03010100033412cdab070002686995b0"
 
 func TestCrc16CheckValue(t *testing.T) {
 	// CRC-16/CCITT-FALSE check value for "123456789" is 0x29B1.
@@ -85,5 +85,12 @@ func TestFlagString(t *testing.T) {
 	}
 	if FlagString(FlagMesh|FlagHealth) != "MESH|HEALTH" {
 		t.Errorf("flags = %q", FlagString(FlagMesh|FlagHealth))
+	}
+	// v3 additions: authenticated + compressed.
+	if FlagString(FlagEncrypted|FlagMac) != "ENC|MAC" {
+		t.Errorf("v3 flags = %q", FlagString(FlagEncrypted|FlagMac))
+	}
+	if FlagString(FlagSqueeze|FlagFragment) != "FRAG|SQZ" {
+		t.Errorf("v3 flags = %q", FlagString(FlagSqueeze|FlagFragment))
 	}
 }

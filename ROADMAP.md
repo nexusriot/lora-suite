@@ -14,6 +14,15 @@ launcher **icons**, **Contact Book**, **Pathfinder**, **Mayday**, **Reactor**,
 bridge (+ Android app), and a system-utilities round — **Settings**
 (brightness/volume in NVS), **SD** (card status + wipe), **IR** (NEC blaster),
 plus **HKDF-SHA256** channel keys and **NTP-over-WiFi** time fallback in Chronos.
+A later round expanded the **BLE bridge + Android companion** to mirror most
+firmware functions and added a real **SD card format** (FatFs `f_mkfs`); then
+**wire v3** landed three protocol features in one version bump — **HMAC message
+authentication** on keyed channels, **Squeeze** text compression (~2:1), and
+working **fragmentation** (messages up to 480 chars). The latest round is
+all-device: **Memos** (voice recorder — the ES8311 microphone was the last
+untouched peripheral), **Coulomb** (battery history + discharge forecast), a
+global **`=` screenshot** hotkey writing BMPs to SD, and **IR codes moved into
+NVS** so the remote is programmable from the phone.
 Everything below is what remains — see [DESIGN.md](DESIGN.md) for how the built
 parts fit together.
 

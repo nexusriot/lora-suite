@@ -44,20 +44,15 @@ public:
     }
   }
 
-  void onPacket(const Frame& f, const RxMeta& m) override {
-    if (f.type == MSG_TEXT) {
-      char body[41];
-      uint8_t n = f.len < 40 ? f.len : 40;
-      memcpy(body, f.payload, n);
-      body[n] = 0;
-      add(f.src, body, m.rssi);
-      if ((f.flags & FLAG_ACK_REQ) && f.dst == ctx.myAddr) {
-        Frame a = makeAck(f.src, f.msgid);
-        netSend(a, true);
-      }
-    } else if (f.type == MSG_ACK && f.len >= 2) {
+  // Text arrives already reassembled and decompressed; the shell also sends the
+  // ACK, so a DM is confirmed even when Courier isn't the open screen.
+  void onTextMessage(uint16_t src, const char* text, uint16_t, const RxMeta& m) override {
+    add(src, text, m.rssi);
+  }
+
+  void onPacket(const Frame& f, const RxMeta&) override {
+    if (f.type == MSG_ACK && f.len >= 2)
       lastAcked_ = (uint16_t)(f.payload[0] | (f.payload[1] << 8));
-    }
   }
 
   void draw(M5Canvas& g) override {
@@ -65,20 +60,40 @@ public:
     ui::header(g, *this);
     g.setTextSize(1);
 
-    int y = ui::BODY_Y + 2;
-    int start = count_ > ROWS ? count_ - ROWS : 0;
-    for (int i = start; i < count_; i++) {
+    // Long messages wrap over several lines, so lay the log out from the newest
+    // backwards until the visible rows are full, then draw top-down.
+    char rows[ROWS][COLS + 1];
+    uint16_t rowSrc[ROWS];
+    int nrows = 0;
+    for (int i = count_ - 1; i >= 0 && nrows < ROWS; i--) {
       const Msg& mm = log_[i % RING];
-      char line[48];
+      char full[Msg::CAP + 16];
       if (mm.src == ctx.myAddr) {
-        std::snprintf(line, sizeof(line), "me> %s", mm.text);
+        std::snprintf(full, sizeof(full), "me> %s", mm.text);
       } else {
         char tmp[14];
-        const char* lbl = ctx.roster.label(mm.src, tmp, sizeof(tmp));
-        std::snprintf(line, sizeof(line), "%s> %s", lbl, mm.text);
+        std::snprintf(full, sizeof(full), "%s> %s", ctx.roster.label(mm.src, tmp, sizeof(tmp)), mm.text);
       }
-      g.setTextColor(mm.src == ctx.myAddr ? theme::ACCENT : theme::TEXT, theme::BG);
-      g.drawString(line, 6, y);
+      int len = (int)std::strlen(full);
+      int chunks = (len + COLS - 1) / COLS;
+      if (chunks < 1) chunks = 1;
+      // Take the tail chunks first (they're nearest the bottom of the screen).
+      for (int c = chunks - 1; c >= 0 && nrows < ROWS; c--) {
+        int off = c * COLS;
+        int n = len - off;
+        if (n > COLS) n = COLS;
+        if (n < 0) n = 0;
+        std::memcpy(rows[nrows], full + off, n);
+        rows[nrows][n] = 0;
+        rowSrc[nrows] = mm.src;
+        nrows++;
+      }
+    }
+
+    int y = ui::BODY_Y + 2;
+    for (int i = nrows - 1; i >= 0; i--) {
+      g.setTextColor(rowSrc[i] == ctx.myAddr ? theme::ACCENT : theme::TEXT, theme::BG);
+      g.drawString(rows[i], 6, y);
       y += 10;
     }
 
@@ -87,17 +102,32 @@ public:
     g.setTextColor(theme::MUTED, theme::BG);
     g.drawString(toBroadcast_ ? "ALL>" : "DM >", 6, iy);
     g.setTextColor(theme::TEXT, theme::BG);
-    g.drawString(input_, 34, iy);
+    // Show the tail of a long compose so the cursor stays visible.
+    const int VIS = 36;
+    const char* shown = inlen_ > VIS ? input_ + (inlen_ - VIS) : input_;
+    g.drawString(shown, 34, iy);
+    if (inlen_ > VIS) {
+      char cnt[8];
+      std::snprintf(cnt, sizeof(cnt), "%d", inlen_);
+      g.setTextColor(theme::MUTED, theme::BG);
+      g.drawString(cnt, ui::SCREEN_W - 24, iy);
+    }
     ui::footer(g);
   }
 
 private:
-  struct Msg { uint16_t src; char text[41]; int16_t rssi; };
-  static const int RING = 24;
+  struct Msg {
+    static const int CAP = 160;   // keep more than fits on screen; draw() wraps it
+    uint16_t src;
+    char text[CAP + 1];
+    int16_t rssi;
+  };
+  static const int RING = 16;
   static const int ROWS = 8;
+  static const int COLS = 44;     // characters per rendered line at text size 1
   Msg log_[RING] = {};
   int count_ = 0;
-  char input_[64] = {0};
+  char input_[TEXT_MAX + 1] = {0};
   int inlen_ = 0;
   bool toBroadcast_ = true;
   uint16_t lastAcked_ = 0;
@@ -105,8 +135,8 @@ private:
   void add(uint16_t src, const char* text, int16_t rssi) {
     Msg& m = log_[count_ % RING];
     m.src = src;
-    std::strncpy(m.text, text, sizeof(m.text) - 1);
-    m.text[sizeof(m.text) - 1] = 0;
+    std::strncpy(m.text, text, Msg::CAP);
+    m.text[Msg::CAP] = 0;
     m.rssi = rssi;
     count_++;
   }
@@ -131,8 +161,8 @@ private:
       }
     }
 
-    Frame f = makeText(dst, body, dst != ADDR_BROADCAST);
-    if (netSend(f)) {
+    // netSendText compresses and, if still too long for one frame, fragments.
+    if (netSendText(dst, body, dst != ADDR_BROADCAST)) {
       add(ctx.myAddr, body, 0);
       char t[9];
       if (ctx.clock) ctx.clock->hms(t); else t[0] = 0;

@@ -5,12 +5,12 @@ explanatory companion to the terse app table in [../README.md](../README.md) and
 the architecture in [../DESIGN.md](../DESIGN.md).
 
 The device is an **M5Stack Cardputer-Adv** with the **Cap LoRa868** module
-(SX1262 radio + GPS). 33 keyboard-driven apps share one radio, one 13-byte wire
+(SX1262 radio + GPS). 38 keyboard-driven apps share one radio, one 13-byte wire
 protocol, one duty-cycle budget, and the module's GPS.
 
 **Keys everywhere:** the `;` `.` `,` `/` cluster is ↑ ↓ ← → · **Enter** confirms /
-opens · **`` ` ``** is back/ESC · **`\`** arms the global distress prompt (ignored
-while typing). Each app shows its own extra keys.
+opens · **`` ` ``** is back/ESC · **`\`** arms the global distress prompt and **`=`**
+saves a screenshot (both ignored while typing). Each app shows its own extra keys.
 
 ---
 
@@ -92,11 +92,18 @@ local Meshtastic world three ways. See the dedicated section in
 |---|---|---|
 | **Settings** (SET) | Adjust screen brightness and speaker volume and have them stick across reboots (saved to NVS). | ↑↓ pick a field, ←→ adjust (±16); applied live and persisted on exit. |
 | **SD** (SD) | Check the microSD at a glance — mount status, card type, total / used / free — and wipe or reformat it. | `r` remounts; `e`+**Enter** erases every file (keeps the filesystem); `f`+**Enter** does a real FAT/FAT32 reformat (FatFs `f_mkfs`, an MBR-partitioned layout PCs accept). |
-| **IR** (IR) | Blast infrared remote codes from the IR LED — a universal-remote starter (Power / Vol± / Mute / Ch±). | ↑↓ pick a code, **Enter** transmits (raw NEC). Reprogram the table for your own gear; **verify the IR LED GPIO on the Adv**. |
+| **IR** (IR) | A programmable universal remote — NEC codes over the IR LED. The table is *your* data: stored in NVS and editable from the phone app, so you can teach it your own gear. | ↑↓ pick, **Enter** transmits, `d` deletes, `r` restores the generic set. Add/edit codes from the companion app's **Remote** tab. **Verify the IR LED GPIO on the Adv.** |
+| **Memos** (REC) | Voice notes — records from the built-in microphone (the last unused peripheral) to WAV on the SD card, and plays them back through the speaker. | **Enter** starts/stops recording; ↑↓ pick a memo, `p` plays, `d` deletes, `r` rescans. 8 kHz mono; mic and speaker share one codec so only one runs at a time. |
+| **Coulomb** (BATT) | How long the battery has left — logs the level over time, fits the discharge trend, and shows time-to-empty plus a graph of the window. Reactor reacts to the level; this predicts it. | Samples once a minute in the background (also to `/batt.csv`); `c` resets the trend after a charge. |
 
 ---
 
 ## Cross-cutting subsystems (not apps)
+
+- **Screenshots** — press **`=`** on any screen to save exactly what is displayed
+  to `/shots/NNN.bmp` on the SD card (24-bit BMP, written a row at a time so it
+  needs no big buffer). Like the distress hotkey it is ignored while an app is
+  capturing typed text, so it never fires mid-message.
 
 - **Status bar** — every screen's footer: duty %, seconds-to-next-permitted-TX,
   TX-queue depth, unread badge, channel, battery, GPS fix.
@@ -120,6 +127,18 @@ a keyed channel (payloads are then ChaCha20-encrypted). The channel key + id are
 derived from the PSK with **HKDF-SHA256** (RFC 5869) — a domain-separated KDF, not
 a raw hash — so related channels get independent keys. The 1% duty governor meters
 a rolling hour; non-urgent transmits are refused once the budget is spent.
+
+Wire **v3** adds three things to every text message:
+
+- **Authenticated** — keyed frames carry an 8-byte HMAC tag, so a tampered or
+  forged frame is dropped instead of decrypting into garbage. (ChaCha20 on its own
+  is malleable: flip a ciphertext bit, flip the plaintext bit.)
+- **Compressed** — messages are packed with a fixed English dictionary, typically
+  to about half size. That is twice the words per 1% duty budget, and often turns a
+  two-frame message into one.
+- **Longer** — you can now compose up to **480 characters**; anything over one
+  frame is split across up to 4 fragments and reassembled at the far end (the old
+  limit was a 63-character input box).
 
 ## Host tools (`tools/`)
 
@@ -155,7 +174,7 @@ The ES8311 codec + 1 W speaker are driven through a shared `services/audio.h`
 (`audio::beep/alert/tone`), initialised at boot (a short boot chirp confirms it
 works). **Klaxon**, **Mayday**, **Countdown** and **Reflex** beeps now actually
 sound, and the **Settings** app sets the master volume. (Still unused: the ES8311
-microphone.)
+microphone — now used by **Memos**.)
 
 ## Hardware note — Cardputer-Adv keyboard
 
