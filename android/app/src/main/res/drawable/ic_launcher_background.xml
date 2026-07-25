@@ -1,0 +1,16 @@
+<!-- Adaptive launcher background: deep teal with a soft halo. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#003D33"
+        android:pathData="M0,0 H108 V108 H0 Z" />
+    <path
+        android:fillColor="#00695C"
+        android:pathData="M54,54 m-46,0 a46,46 0 1 0 92,0 a46,46 0 1 0 -92,0 Z" />
+    <path
+        android:fillColor="#00897B"
+        android:pathData="M54,54 m-33,0 a33,33 0 1 0 66,0 a33,33 0 1 0 -66,0 Z" />
+</vector>

@@ -25,4 +25,9 @@ Frame makeCountdown(uint32_t unix, uint8_t code);
 // Execute a fired Reflex rule action (beep / send canned text / alert / beacon).
 void runRuleAction(const RuleAction& a);
 
+// Connect to the stored WiFi network, fetch UTC via SNTP, and adopt it into the
+// Clock as an NTP source (a GPS-less time fallback). Blocks up to ~13 s; returns
+// true on success. WiFi is turned off again afterward.
+bool ntpSyncViaWifi();
+
 } // namespace ls

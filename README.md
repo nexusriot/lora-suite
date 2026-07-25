@@ -1,7 +1,7 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **32** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **33** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
@@ -62,18 +62,22 @@ can never interleave with a radio transaction. See `src/hal/`.
 | MCHT | MeshChat | Two-way conversation on the Meshtastic public channel — RX + TX text in one feed; Tab cycles preset |
 | MON | Monitor | Promiscuous frame monitor (type / addr / RSSI / SNR) |
 | RNG | Ranger | Ping/echo link test — RSSI, SNR, RTT, loss, distance |
-| TIME | Chronos | Mesh time-sync (GPS→TIMESYNC) for the RTC-less fleet + daylight-length almanac |
+| TIME | Chronos | Mesh time-sync (GPS→TIMESYNC) for the RTC-less fleet + daylight-length almanac; `n` = NTP-over-WiFi time fallback |
 | CDWN | Countdown | Mesh-wide synchronized timer anchored to absolute UTC — every node fires together at T-0 |
 | CFG | Console | Radio profiles + live airtime / duty / link-budget calculator; `m` applies the Meshtastic preset |
 | GW | Gateway | Uplink heard frames over USB serial as JSON (feeds `tools/lorakit` dissect / a map of your fleet) |
 | PRB | Probe | Hardware self-test — I2C scan + radio/GPS/SD/keyboard/board status on one screen |
 | WIFI | WiFi | Scan 2.4 GHz WiFi APs (SSID / RSSI / channel / secured) — uses the otherwise-unused WiFi radio |
+| BT | Bluetooth | Enable the BLE companion bridge for the [Cardputer Companion](android/) Android app (messaging/status/mesh/config) |
 | LOG | Ledger | Per-type airtime audit against the 1% duty budget + a daily SD summary |
 | RULE | Reflex | On-device IFTTT: event→action rules (RX-type / alert / low-battery / periodic) |
 | PWR | Reactor | Battery-aware power state machine (CPU/LCD degrade with hysteresis) + Survival low-power beacon |
 | ALRT | Klaxon | LoRa pager — canned alerts, speaker + screen flash on receipt |
 | TLM | Telemetry | Streams BMI270 motion + battery; paired unit shows values |
 | DROP | Dropbox | Chunked note/file transfer (stretch app) |
+| SET | Settings | Screen brightness + speaker volume, persisted to NVS (applied live) |
+| SD | SD | microSD status (type / used / free), remount, and erase-all wipe |
+| IR | IR | Infrared NEC remote blaster (Power/Vol/Mute/Ch presets) over the IR LED |
 
 **Cross-cutting (not apps):**
 - **Status bar** — every screen's footer shows duty %, a *seconds-to-next-permitted-TX* countdown, TX-queue depth, unread badge, channel, battery and GPS fix.
@@ -170,17 +174,18 @@ against a C-encoded golden frame.
 ```
 src/
   proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
-             roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite  (portable, tested)
-  crypto/    chacha20 · channel · aes                                      (portable, tested)
-  services/  lora · gps · storage · clock                                  (device)
+             roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec  (portable, tested)
+  crypto/    chacha20 · channel · aes · sha256 (HMAC/HKDF)                  (portable, tested)
+  services/  lora · gps · storage · clock · audio · ir                     (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      32 apps                                                       (device)
+  apps/      36 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/    host unit tests (g++)
 tools/meshpull/ meshmap.net -> SD import tool (Go, tested)
 tools/lorakit/  wire-codec Go port + `dissect` CLI (tested)
+android/        Kotlin/Compose BLE companion app (Cardputer Companion)
 ```
 
 ## Build & flash (device)
@@ -225,8 +230,9 @@ cd tools/lorakit  && go test ./...
 
 - **Region** EU868 by default (`Console` cycles EU868 / US915 / AS923).
 - **Encryption** opt-in — channel 0 is cleartext "public"; set a PSK for a keyed
-  channel. The skeleton's key-stretch is a placeholder; use a real KDF
-  (HKDF/SHA-256) before relying on it.
+  channel (payloads then ChaCha20-encrypted). The channel key + id are derived
+  from the PSK with **HKDF-SHA256** (RFC 5869, domain-separated), verified against
+  the RFC test vectors in the host test suite.
 - **Duty cycle** 1% governor on a 1-hour rolling window; non-urgent TX is
   refused once the budget is spent.
 - **Relay** runs always-on in the background of every app (toggle in RLY).

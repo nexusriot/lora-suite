@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cardputer Companion</string>
+    <string name="profiles">Profiles</string>
+    <string name="add_profile">Add Profile</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="delete_profile">Delete Profile</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="name">Name</string>
+    <string name="base_url">Base URL (leave blank for AWS)</string>
+    <string name="region">Region</string>
+    <string name="access_key">Access Key</string>
+    <string name="secret_key">Secret Key</string>
+    <string name="ignore_ssl">Ignore SSL Errors</string>
+    <string name="download_dir">Download Directory</string>
+    <string name="no_profiles">No profiles yet. Tap + to add one.</string>
+    <string name="connect">Connect</string>
+    <string name="buckets">Buckets</string>
+    <string name="create_bucket">Create Bucket</string>
+    <string name="create_folder">Create Folder</string>
+    <string name="upload_file">Upload File</string>
+    <string name="download">Download</string>
+    <string name="properties">Properties</string>
+    <string name="presigned_url">Presigned URL</string>
+    <string name="copy_url">Copy URL</string>
+    <string name="rename">Rename</string>
+    <string name="confirm_delete">Confirm Delete</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+</resources>

@@ -1,0 +1,8 @@
+-keep class com.amazonaws.** { *; }
+-keep interface com.amazonaws.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-dontwarn com.amazonaws.**
+-dontwarn org.apache.commons.**
+-dontwarn org.apache.http.**
+-dontwarn android.net.http.**

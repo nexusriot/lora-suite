@@ -1,0 +1,129 @@
+<!--
+  S3Duck mascot — "Mecha-Duck"
+  A mech-style rubber ducky: classic rubber-duck silhouette in duck-yellow
+  fitted with steel plating, a sensor visor, a thruster and a comms antenna.
+  Single self-contained vector; viewport 512x512. Reused by the adaptive
+  launcher foreground (see ic_launcher_foreground.xml) and by the in-app UI.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <!-- ===== Thruster (behind body) ===== -->
+    <path
+        android:fillColor="#607D8B"
+        android:pathData="M95,402 L150,415 L140,452 L88,434 Z" />
+    <path
+        android:fillColor="#00BFA5"
+        android:pathData="M100,440 L138,448 L118,498 L96,458 Z" />
+    <path
+        android:fillColor="#5CEACF"
+        android:pathData="M108,446 L130,452 L116,482 Z" />
+
+    <!-- ===== Tail ===== -->
+    <path
+        android:fillColor="#FFCA28"
+        android:pathData="M88,298 L40,250 Q44,300 70,322 Q80,312 88,298 Z" />
+
+    <!-- ===== Body ===== -->
+    <path
+        android:fillColor="#FFCA28"
+        android:pathData="M70,330 a150,105 0 1 0 300,0 a150,105 0 1 0 -300,0 Z" />
+    <!-- Belly shading -->
+    <path
+        android:fillColor="#F0A800"
+        android:pathData="M107,385 a118,42 0 1 0 236,0 a118,42 0 1 0 -236,0 Z" />
+
+    <!-- ===== Wing / armour plate ===== -->
+    <path
+        android:fillColor="#B0BEC5"
+        android:strokeColor="#607D8B"
+        android:strokeWidth="3"
+        android:pathData="M140,340 a85,50 0 1 0 170,0 a85,50 0 1 0 -170,0 Z" />
+    <path
+        android:strokeColor="#607D8B"
+        android:strokeWidth="4"
+        android:pathData="M170,340 q55,26 110,0" />
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M175,338 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0 Z" />
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M225,372 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0 Z" />
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M280,338 m-7,0 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0 Z" />
+
+    <!-- ===== Chest status light ===== -->
+    <path
+        android:fillColor="#00BFA5"
+        android:pathData="M330,346 m-15,0 a15,15 0 1 0 30,0 a15,15 0 1 0 -30,0 Z" />
+    <path
+        android:fillColor="#5CEACF"
+        android:pathData="M330,346 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z" />
+
+    <!-- ===== Head ===== -->
+    <path
+        android:fillColor="#FFCA28"
+        android:pathData="M245,185 a95,95 0 1 0 190,0 a95,95 0 1 0 -190,0 Z" />
+    <!-- Head highlight -->
+    <path
+        android:fillColor="#FFE082"
+        android:pathData="M270,135 a42,26 0 1 0 84,0 a42,26 0 1 0 -84,0 Z" />
+
+    <!-- ===== Sensor visor ===== -->
+    <path
+        android:fillColor="#B0BEC5"
+        android:strokeColor="#607D8B"
+        android:strokeWidth="3"
+        android:pathData="M270,150 L415,150 Q432,150 432,170 Q432,190 415,190 L270,190 Q256,190 256,170 Q256,150 270,150 Z" />
+    <path
+        android:fillColor="#003D33"
+        android:pathData="M278,158 L410,158 Q422,158 422,170 Q422,182 410,182 L278,182 Q268,182 268,170 Q268,158 278,158 Z" />
+    <!-- Eye glow -->
+    <path
+        android:fillColor="#00BFA5"
+        android:pathData="M380,170 m-12,0 a12,12 0 1 0 24,0 a12,12 0 1 0 -24,0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M384,166 m-5,0 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 Z" />
+    <!-- Secondary sensor dot -->
+    <path
+        android:fillColor="#5CEACF"
+        android:pathData="M300,170 m-5,0 a5,5 0 1 0 10,0 a5,5 0 1 0 -10,0 Z" />
+
+    <!-- ===== Beak ===== -->
+    <path
+        android:fillColor="#FB8C00"
+        android:pathData="M412,158 L484,180 Q495,193 484,206 L412,228 Q400,193 412,158 Z" />
+    <path
+        android:strokeColor="#E65100"
+        android:strokeWidth="5"
+        android:pathData="M428,194 L482,194" />
+
+    <!-- ===== Cheek bolt ===== -->
+    <path
+        android:fillColor="#B0BEC5"
+        android:strokeColor="#607D8B"
+        android:strokeWidth="2"
+        android:pathData="M272,225 m-9,0 a9,9 0 1 0 18,0 a9,9 0 1 0 -18,0 Z" />
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M272,225 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0 Z" />
+
+    <!-- ===== Antenna ===== -->
+    <path
+        android:strokeColor="#607D8B"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:pathData="M338,96 L322,50" />
+    <path
+        android:fillColor="#00BFA5"
+        android:pathData="M320,44 m-15,0 a15,15 0 1 0 30,0 a15,15 0 1 0 -30,0 Z" />
+    <path
+        android:fillColor="#5CEACF"
+        android:pathData="M317,40 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 Z" />
+
+</vector>

@@ -14,6 +14,7 @@ inline void init(uint8_t volume = 200) {
   M5.Speaker.setVolume(volume);
 }
 
+inline void setVolume(uint8_t v) { M5.Speaker.setVolume(v); }
 inline void tone(uint32_t freqHz, uint32_t ms) { M5.Speaker.tone((float)freqHz, ms); }
 inline void stop() { M5.Speaker.stop(); }
 

@@ -93,6 +93,28 @@ bool Storage::loadMeshImport(MeshOverlay& mesh, uint32_t now) {
   return true;
 }
 
+void Storage::loadSettings(uint8_t& brightness, uint8_t& volume) {
+  brightness = (uint8_t)s_prefs.getUChar("bright", 26);   // 10% default
+  volume = (uint8_t)s_prefs.getUChar("vol", 200);
+}
+
+void Storage::saveSettings(uint8_t brightness, uint8_t volume) {
+  s_prefs.putUChar("bright", brightness);
+  s_prefs.putUChar("vol", volume);
+}
+
+void Storage::loadWifi(char* ssid, uint8_t ssidCap, char* pass, uint8_t passCap) {
+  String s = s_prefs.getString("wssid", "");
+  std::strncpy(ssid, s.c_str(), ssidCap - 1); ssid[ssidCap - 1] = 0;
+  String p = s_prefs.getString("wpass", "");
+  std::strncpy(pass, p.c_str(), passCap - 1); pass[passCap - 1] = 0;
+}
+
+void Storage::saveWifi(const char* ssid, const char* pass) {
+  s_prefs.putString("wssid", ssid ? ssid : "");
+  s_prefs.putString("wpass", pass ? pass : "");
+}
+
 int Storage::readFile(const char* path, uint8_t* buf, int cap) {
   if (!sd_) return -1;
   SpiBus::Guard g;

@@ -5,7 +5,11 @@
 #include <esp_system.h>
 #include "../services/lora_service.h"
 #include "../services/gps_service.h"
+#include "../services/storage.h"
 #include "../services/audio.h"
+#include "../services/clock.h"
+#include <WiFi.h>
+#include <time.h>
 
 namespace ls {
 
@@ -206,6 +210,35 @@ void runRuleAction(const RuleAction& a) {
     default:
       break;
   }
+}
+
+bool ntpSyncViaWifi() {
+  if (!ctx.store || !ctx.clock) return false;
+  char ssid[33] = {0}, pass[65] = {0};
+  ctx.store->loadWifi(ssid, sizeof(ssid), pass, sizeof(pass));
+  if (!ssid[0]) return false;
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass[0] ? pass : nullptr);   // nullptr key = open network
+  uint32_t t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) delay(100);
+
+  bool ok = false;
+  if (WiFi.status() == WL_CONNECTED) {
+    configTime(0, 0, "pool.ntp.org", "time.google.com");   // UTC, no DST offset
+    struct tm tmv;
+    if (getLocalTime(&tmv, 5000)) {
+      time_t now = time(nullptr);
+      if (now > 1600000000) {   // sanity: after 2020, so SNTP really landed
+        ctx.clock->adopt((uint32_t)now, 3);   // 3 = NTP
+        ctx.timeSource = 3;
+        ok = true;
+      }
+    }
+  }
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
+  return ok;
 }
 
 } // namespace ls

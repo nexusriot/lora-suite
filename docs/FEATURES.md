@@ -5,7 +5,7 @@ explanatory companion to the terse app table in [../README.md](../README.md) and
 the architecture in [../DESIGN.md](../DESIGN.md).
 
 The device is an **M5Stack Cardputer-Adv** with the **Cap LoRa868** module
-(SX1262 radio + GPS). 32 keyboard-driven apps share one radio, one 13-byte wire
+(SX1262 radio + GPS). 33 keyboard-driven apps share one radio, one 13-byte wire
 protocol, one duty-cycle budget, and the module's GPS.
 
 **Keys everywhere:** the `;` `.` `,` `/` cluster is ↑ ↓ ← → · **Enter** confirms /
@@ -68,12 +68,13 @@ local Meshtastic world three ways. See the dedicated section in
 | **Ledger** (LOG) | See what's eating your 1% duty budget — per-message-type airtime accounting + a daily SD summary. | Read-only breakdown. |
 | **Probe** (PRB) | Hardware self-test — scans the I2C bus and reports radio / GPS / SD / keyboard / board status on one screen. The fastest way to spot a wiring or detection fault (e.g. a missing keyboard chip). | `r` re-scans. |
 | **WiFi** (WIFI) | Scan nearby WiFi access points (SSID / signal / channel / secured) using the otherwise-unused 2.4 GHz radio — a quick site survey. | `r` re-scans, `↑`/`↓` scroll. |
+| **Bluetooth** (BT) | Enable the BLE companion bridge so the phone app can pair and drive the device (messaging / status / mesh / config). | Enter toggles it; shows advertising/connected state. |
 
 ## Time
 
 | App | For what | How |
 |---|---|---|
-| **Chronos** (TIME) | Give the RTC-less fleet a shared clock — distribute GPS-derived UTC over the mesh; also a daylight-length almanac. | Toggle time-sync broadcast. |
+| **Chronos** (TIME) | Give the RTC-less fleet a shared clock — distribute GPS-derived UTC over the mesh; also a daylight-length almanac. When there's no GPS fix, **`n`** pulls UTC from the internet over WiFi (SNTP) as a fallback. | Enter broadcasts the sync; **`n`** does a WiFi/NTP sync (needs stored WiFi creds; blocks ~10 s). |
 | **Countdown** (CDWN) | A mesh-wide synchronized timer — every node counts down to the same absolute UTC instant and fires together. | Set a fire time; it broadcasts to the mesh. |
 
 ## Automation, power, sensors, transfer
@@ -84,6 +85,14 @@ local Meshtastic world three ways. See the dedicated section in
 | **Reactor** (PWR) | Extend battery life — a power state machine that degrades CPU/LCD with hysteresis and drops to a survival low-power beacon. | Automatic; shows the current power state. |
 | **Telemetry** (TLM) | Stream live motion (IMU) + battery to a paired unit — a template for any sensor feed. | Enter toggles transmit; a paired unit shows the values. |
 | **Dropbox** (DROP) | Send a note/file in chunks over the link (stretch feature). | Chunked transfer. |
+
+## System & utilities
+
+| App | For what | How |
+|---|---|---|
+| **Settings** (SET) | Adjust screen brightness and speaker volume and have them stick across reboots (saved to NVS). | ↑↓ pick a field, ←→ adjust (±16); applied live and persisted on exit. |
+| **SD** (SD) | Check the microSD at a glance — mount status, card type, total / used / free — and wipe it. | `r` remounts; `e` then **Enter** erases every file (recursive delete; a true FAT reformat isn't exposed by the Arduino SD API). |
+| **IR** (IR) | Blast infrared remote codes from the IR LED — a universal-remote starter (Power / Vol± / Mute / Ch±). | ↑↓ pick a code, **Enter** transmits (raw NEC). Reprogram the table for your own gear; **verify the IR LED GPIO on the Adv**. |
 
 ---
 
@@ -107,7 +116,9 @@ local Meshtastic world three ways. See the dedicated section in
 ## Wire protocol & channels
 
 13-byte header + payload + CRC-16. Channel 0 is cleartext "public"; set a PSK for
-a keyed channel (payloads are then ChaCha20-encrypted). The 1% duty governor meters
+a keyed channel (payloads are then ChaCha20-encrypted). The channel key + id are
+derived from the PSK with **HKDF-SHA256** (RFC 5869) — a domain-separated KDF, not
+a raw hash — so related channels get independent keys. The 1% duty governor meters
 a rolling hour; non-urgent transmits are refused once the budget is spent.
 
 ## Host tools (`tools/`)
@@ -119,12 +130,24 @@ a rolling hour; non-urgent transmits are refused once the budget is spent.
   frames from a hex capture or the **Gateway** app's JSON, for debugging and for
   building a self-hosted map of your own fleet.
 
+## Phone companion (Bluetooth)
+
+The **Bluetooth** app enables a BLE bridge (`shell/ble_bridge`, a Nordic-UART GATT
+service) that the **Cardputer Companion** Android app (in [`android/`](../android))
+pairs to. Over it the phone can send/receive LoRa messages, read a live status
+dashboard + node table, view the scanned Meshtastic feed, change config
+(callsign/address/region/brightness), store the device's WiFi credentials, and
+trigger an NTP time-sync — a phone front-end like the Meshtastic app. The ESP32-S3
+is BLE-only (no Classic SPP); commands/events are newline-delimited JSON. BLE and
+the WiFi scanner/NTP sync share the 2.4 GHz radio — don't run them at once.
+
 ## Audio
 
 The ES8311 codec + 1 W speaker are driven through a shared `services/audio.h`
 (`audio::beep/alert/tone`), initialised at boot (a short boot chirp confirms it
 works). **Klaxon**, **Mayday**, **Countdown** and **Reflex** beeps now actually
-sound. (Still unused: the ES8311 microphone and the IR transmitter.)
+sound, and the **Settings** app sets the master volume. (Still unused: the ES8311
+microphone.)
 
 ## Hardware note — Cardputer-Adv keyboard
 

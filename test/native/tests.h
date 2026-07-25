@@ -8,6 +8,8 @@ void run_nodetable_tests();
 void run_meshoverlay_tests();
 void run_crypto_tests();
 void run_aes_tests();
+void run_sha256_tests();
+void run_nec_tests();
 void run_meshtastic_tests();
 void run_payloads_tests();
 void run_txqueue_tests();

@@ -35,6 +35,14 @@ public:
   // Replaces the overlay's imported entries; live scanned nodes are preserved.
   bool loadMeshImport(MeshOverlay& mesh, uint32_t now);
 
+  // UI settings (brightness / speaker volume), NVS-persisted.
+  void loadSettings(uint8_t& brightness, uint8_t& volume);
+  void saveSettings(uint8_t brightness, uint8_t volume);
+
+  // WiFi credentials for the NTP time fallback.
+  void loadWifi(char* ssid, uint8_t ssidCap, char* pass, uint8_t passCap);
+  void saveWifi(const char* ssid, const char* pass);
+
   // microSD.
   bool sdReady() const { return sd_; }
   bool sdBegin();

@@ -18,6 +18,14 @@ build/
 lora-suite-tests
 *.out
 
+# Android companion (android/) — Gradle build output + machine-local config
+.gradle/
+.kotlin/
+local.properties
+*.apk
+*.aab
+captures/
+
 # Editors / IDE
 .vscode/
 .idea/

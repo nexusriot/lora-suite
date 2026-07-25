@@ -8,6 +8,7 @@
 #include "shell/net.h"
 #include "shell/screen_manager.h"
 #include "shell/launcher.h"
+#include "shell/ble_bridge.h"
 #include "services/lora_service.h"
 #include "services/gps_service.h"
 #include "services/storage.h"
@@ -42,6 +43,10 @@
 #include "apps/gateway.h"
 #include "apps/probe.h"
 #include "apps/wifi_scan.h"
+#include "apps/bt.h"
+#include "apps/settings.h"
+#include "apps/sdutils.h"
+#include "apps/ir_blaster.h"
 #include "apps/ledger.h"
 #include "apps/reflex.h"
 #include "apps/reactor.h"
@@ -82,6 +87,10 @@ static Console     console;
 static Gateway     gateway;
 static Probe       probe;
 static WifiScan    wifiScan;
+static Bluetooth   bluetooth;
+static Settings    settingsApp;
+static SdUtils     sdUtils;
+static IrBlaster   irBlaster;
 static Ledger      ledgerApp;
 static Reflex      reflexApp;
 static Reactor     reactor;
@@ -92,7 +101,7 @@ static Dropbox    dropbox;
 static App* apps[] = {
     &courier, &chat, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &gpsApp, &radar,
     &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &meshChat, &monitor, &ranger, &chronos, &countdownApp,
-    &console, &gateway, &probe, &wifiScan, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
+    &console, &gateway, &probe, &wifiScan, &bluetooth, &settingsApp, &sdUtils, &irBlaster, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
 static const int APP_COUNT = sizeof(apps) / sizeof(apps[0]);
 
 static ScreenManager sm;
@@ -195,6 +204,7 @@ static void onRadioFrame(Frame& f, const RxMeta& m) {
         char t[9];
         clk.hms(t);
         ctx.archive.add(t, 'I', f.src, body);   // persist received text (Archive)
+        ble::onRadioText(f.src, body, m.rssi);  // mirror to the phone bridge
       }
       break;
     case MSG_ALERT:
@@ -317,6 +327,7 @@ void setup() {
   SpiBus::begin();
 
   storage.begin();
+  { uint8_t b, v; storage.loadSettings(b, v); M5Cardputer.Display.setBrightness(b); audio::setVolume(v); }
   storage.loadIdentity(ctx.myAddr, ctx.callName, sizeof(ctx.callName));
   if (ctx.myAddr == 0 || ctx.myAddr == ADDR_BROADCAST) {
     uint64_t mac = ESP.getEfuseMac();
@@ -356,6 +367,7 @@ void loop() {
   loraSvc.loop();          // drains RX + pumps the Marshal TX queue
   gpsSvc.loop();
   clk.loop();
+  ble::loop();
   ctx.timeSource = clk.source();
   translateKeys();
   pollKeyboardAdv();

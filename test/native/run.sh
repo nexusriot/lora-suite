@@ -19,6 +19,7 @@ g++ -std=c++17 -O2 -Wall -Wextra \
   "$root"/src/proto/solar.cpp \
   "$root"/src/crypto/chacha20.cpp \
   "$root"/src/crypto/aes.cpp \
+  "$root"/src/crypto/sha256.cpp \
   "$root"/src/crypto/channel.cpp \
   -o "$out"
 

@@ -15,6 +15,8 @@ int main() {
   run_meshoverlay_tests();
   run_crypto_tests();
   run_aes_tests();
+  run_sha256_tests();
+  run_nec_tests();
   run_meshtastic_tests();
   run_payloads_tests();
   run_txqueue_tests();

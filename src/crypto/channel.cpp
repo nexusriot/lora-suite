@@ -1,25 +1,25 @@
 #include "channel.h"
 #include "chacha20.h"
+#include "sha256.h"
 #include <cstring>
 
 namespace ls {
 
-// NOTE: this is a lightweight key-stretch adequate for a skeleton. On device,
-// replace with a real KDF (HKDF/SHA-256 via mbedtls) before relying on it.
+// Derive the 32-byte ChaCha20 key from the PSK with HKDF-SHA256 (RFC 5869), with
+// a domain-separation salt/info so the key is specific to this app + purpose.
 void Channel::setPSK(const char* psk) {
   size_t n = psk ? std::strlen(psk) : 0;
   if (n == 0) { clear(); return; }
 
-  for (int i = 0; i < 32; i++) key_[i] = (uint8_t)(psk[i % n] + i * 31);
-  // one diffusion pass so related PSKs don't yield related keys
-  uint8_t zero[32] = {0};
-  uint8_t nonce[12] = {0};
-  chacha20_xor(key_, 32, key_, nonce, 0);
-  (void)zero;
+  static const char SALT[] = "lora-suite/channel/v1";
+  static const char INFO[] = "chacha20-key";
+  hkdf_sha256((const uint8_t*)SALT, sizeof(SALT) - 1, (const uint8_t*)psk, n,
+              (const uint8_t*)INFO, sizeof(INFO) - 1, key_, 32);
 
-  uint8_t h = 0;
-  for (int i = 0; i < 32; i++) h ^= key_[i];
-  id_ = h ? h : 1;         // reserve 0 for the public channel
+  // Channel id byte = first byte of SHA256(key), reserving 0 for the public channel.
+  uint8_t h[32];
+  sha256(key_, 32, h);
+  id_ = h[0] ? h[0] : 1;
   encrypted_ = true;
 }
 

@@ -1,14 +1,21 @@
 # LoRa Suite — Feature Backlog & Roadmap
 
-## Built so far (23 apps + cross-cutting)
+## Built so far (36 apps + cross-cutting)
 
 The original 12 apps (Courier, Relay, Beacon, Radar, Breadcrumb, Sweep, Monitor,
 Ranger, Console, Klaxon, Telemetry, Dropbox) plus, from these backlogs:
 **Status-bar next-TX**, **Pulse** health TLV, **Marshal** (CAD MAC + priority queue),
 launcher **icons**, **Contact Book**, **Pathfinder**, **Mayday**, **Reactor**,
 **Presence**, **Fleet**, **Archive**, **Recall**, **Ledger**, **Chronos**,
-**Countdown**, and **Reflex** (on-device rule engine). Everything below is what
-remains — see [DESIGN.md](DESIGN.md) for how the built parts fit together.
+**Countdown**, and **Reflex** (on-device rule engine). Later rounds added the
+**Meshtastic interop** suite (**Mesh** import/overlay, **MeshScan** OTA decoder,
+**MeshTX** + **MeshChat** transmit/chat, **Gateway** USB uplink), **Probe**
+(HAL self-test), **GPS**, **Chat**, **WiFi** scanner, **Bluetooth** companion
+bridge (+ Android app), and a system-utilities round — **Settings**
+(brightness/volume in NVS), **SD** (card status + wipe), **IR** (NEC blaster),
+plus **HKDF-SHA256** channel keys and **NTP-over-WiFi** time fallback in Chronos.
+Everything below is what remains — see [DESIGN.md](DESIGN.md) for how the built
+parts fit together.
 
 ---
 

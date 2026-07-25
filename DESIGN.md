@@ -1,6 +1,6 @@
 # LoRa Suite — Design
 
-A multi-app LoRa toolkit (32 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
+A multi-app LoRa toolkit (36 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
 (SX1262 radio + ATGM336H GPS), at `/home/vlad/workspace/my/lora-suite`. This document
 is the maintainable companion to the rendered [design brief](docs/design-brief.html);
 see [ROADMAP.md](ROADMAP.md) for the feature backlog and [README.md](README.md) for
@@ -12,7 +12,7 @@ the user-facing overview.
   framing, crypto, mesh dedup, duty accounting — live in shared services. Adding
   an app means writing a screen, not a driver.
 - **The portable core is host-tested.** Everything in `src/proto` and `src/crypto`
-  is dependency-free C++ with native unit tests (`test/native/run.sh`, 353 checks),
+  is dependency-free C++ with native unit tests (`test/native/run.sh`, 461 checks),
   so protocol/codec/logic bugs are caught without hardware.
 - **Respect the band.** 868 MHz is duty-limited (~1%); a governor meters every
   transmission and the Marshal scheduler gates all TX.
@@ -20,13 +20,13 @@ the user-facing overview.
 ## Layers
 
 ```
-apps/      32 keyboard-driven screens (each an App subclass)
-shell/     launcher · screen manager · context (ctx) · net glue · archive FIFO
+apps/      36 keyboard-driven screens (each an App subclass)
+shell/     launcher · screen manager · context (ctx) · net glue · archive FIFO · ble_bridge
 ui/        theme (RGB565 palette) · widgets (header/footer/status bar)
-services/  lora (RadioLib SX1262) · gps (TinyGPSPlus) · storage (NVS+SD) · clock
+services/  lora (RadioLib SX1262) · gps (TinyGPSPlus) · storage (NVS+SD) · clock · audio · ir
 proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
-           roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite  (portable, tested)
-crypto/    chacha20 · channel · aes                               (portable, tested)
+           roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec  (portable, tested)
+crypto/    chacha20 · channel · aes · sha256 (HMAC/HKDF)          (portable, tested)
 hal/       pins.h · spi_bus (shared radio+SD mutex)
 ```
 
@@ -88,6 +88,12 @@ MAGIC VER TYPE FLAGS CHAN HOP SRC(2) DST(2) MSGID(2) LEN | PAYLOAD | CRC16(2)
 - **Archive** — text captured on the hot paths into a RAM FIFO (`ctx.archive`),
   drained to `/archive.csv` from `background()` (never on the RX path); a viewer
   reads the file tail.
+- **BLE companion bridge** (`shell/ble_bridge` + `apps/bt.h`) — an opt-in NimBLE
+  Nordic-UART GATT peripheral. Commands from the phone arrive on the BLE host task
+  and are queued to a single-slot mailbox drained on the main loop (radio access
+  stays single-threaded); events (incoming msg, status, node/mesh dumps) are
+  notified as newline-delimited JSON. The `android/` companion app (Kotlin/Compose)
+  is the client. BLE + WiFi share the 2.4 GHz radio, so they're not run simultaneously.
 - **Meshtastic interop** — three ways to observe the foreign Meshtastic world on
   the shared 868 band, all feeding a `MeshOverlay` kept apart from `NodeTable`
   (situational-awareness only — never relayed/ACKed/addressed; keyed by 32-bit

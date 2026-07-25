@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="duck_teal_primary">#00695C</color>
+    <color name="duck_teal_dark">#003D33</color>
+    <color name="duck_teal_light">#439889</color>
+    <color name="duck_accent">#00BFA5</color>
+    <color name="background_dark">#121212</color>
+    <color name="surface_dark">#1E1E1E</color>
+    <color name="on_surface">#E0E0E0</color>
+</resources>

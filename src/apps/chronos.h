@@ -28,7 +28,13 @@ public:
   }
 
   void onKey(const KeyEvent& k) override {
-    if (k.enter) broadcast();   // manual sync push
+    if (k.enter) {
+      broadcast();   // manual sync push
+    } else if (k.ch == 'n' || k.ch == 'N') {
+      // Blocks up to ~13 s while WiFi associates + SNTP replies; the UI can't
+      // repaint mid-call, so we just latch the outcome for the next frame.
+      ntp_ = ntpSyncViaWifi() ? 1 : 2;   // 1 ok, 2 failed
+    }
   }
 
   void background() override {
@@ -74,14 +80,20 @@ public:
       g.drawString("almanac needs a GPS fix", 6, y);
     }
 
+    if (ntp_) {
+      g.setTextColor(ntp_ == 1 ? theme::GOOD : theme::WARN, theme::BG);
+      g.drawString(ntp_ == 1 ? "NTP sync ok" : "NTP sync failed", 6, y + 14);
+    }
+
     g.setTextColor(theme::MUTED, theme::BG);
-    g.drawString("Enter: push sync", 6, ui::SCREEN_H - ui::FOOTER_H - 12);
+    g.drawString("Enter: push  n: NTP/WiFi", 6, ui::SCREEN_H - ui::FOOTER_H - 12);
     ui::footer(g);
   }
 
 private:
   static const uint32_t PERIOD_MS = 300000;   // 5 min
   uint32_t last_ = 0;
+  uint8_t  ntp_ = 0;   // 0 idle, 1 last sync ok, 2 last sync failed
 
   void broadcast() {
     Clock* c = ctx.clock;
