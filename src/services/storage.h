@@ -4,6 +4,7 @@
 #include "../proto/roster.h"
 #include "../proto/rules.h"
 #include "../proto/meshoverlay.h"
+#include "../proto/meshtastic.h"
 #include "../proto/ircodes.h"
 
 namespace ls {
@@ -35,6 +36,12 @@ public:
   // Foreign-node snapshot from SD (/mesh/import.csv, produced by tools/meshpull).
   // Replaces the overlay's imported entries; live scanned nodes are preserved.
   bool loadMeshImport(MeshOverlay& mesh, uint32_t now);
+
+  // Meshtastic network settings (region/preset/channel/key/identity). Returns
+  // false when nothing is stored or the blob predates the current layout, so the
+  // caller keeps its defaults rather than adopting a half-read config.
+  bool loadMeshCfg(MeshtasticCfg& cfg);
+  void saveMeshCfg(const MeshtasticCfg& cfg);
 
   // UI settings (brightness / speaker volume), NVS-persisted.
   void loadSettings(uint8_t& brightness, uint8_t& volume);

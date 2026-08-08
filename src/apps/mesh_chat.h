@@ -32,6 +32,7 @@ public:
 
   void onEnter() override {
     active_ = this;
+    preset_ = ctx.meshCfg.preset;
     if (ctx.lora) {
       saved_ = ctx.cfg;
       ctx.lora->setRxOnly(true);
@@ -100,12 +101,12 @@ private:
   int count_ = 0;
   char input_[64] = {0};
   int len_ = 0;
-  int preset_ = 0;             // 0 = LongFast (Meshtastic default)
+  uint8_t preset_ = MPRESET_LONG_FAST;   // seeded from ctx.meshCfg on enter
   uint32_t sent_ = 0;
 
   void applyPreset() {
     if (ctx.lora) {
-      ctx.lora->applyConfig(meshtasticPreset(preset_));
+      ctx.lora->applyConfig(meshtasticRadioCfg(ctx.meshCfg, preset_));
       ctx.lora->startReceive();
     }
   }
@@ -123,9 +124,10 @@ private:
     if (!ctx.lora || len_ == 0) return;
     uint8_t frame[128];
     uint32_t pid = ((uint32_t)millis() << 8) ^ (++seq_);
-    uint32_t from = 0x4C530000u | ctx.myAddr;
-    size_t n = meshtastic_encode_text(from, pid, meshtasticChannelHash(preset_),
-                                      input_, MESH_DEFAULT_KEY, frame, sizeof(frame));
+    uint32_t from = meshtasticNodeId(ctx.meshCfg, ctx.myAddr);
+    size_t n = meshtastic_encode_text(from, pid, meshtasticChannelHash(ctx.meshCfg, preset_),
+                                      input_, ctx.meshCfg.key, ctx.meshCfg.keyLen,
+                                      frame, sizeof(frame));
     if (n && ctx.lora->transmitRaw(frame, n)) {   // direct TX on the current preset
       add(from, true, input_);
       sent_++;
@@ -141,7 +143,7 @@ private:
   }
   void handleRaw(const uint8_t* buf, size_t n, const RxMeta&) {
     MeshPacket p;
-    if (meshtastic_decode(buf, n, MESH_DEFAULT_KEY, p) && p.hasText)
+    if (meshtastic_decode(buf, n, ctx.meshCfg.key, ctx.meshCfg.keyLen, p) && p.hasText)
       add(p.from, false, p.text);
   }
 };

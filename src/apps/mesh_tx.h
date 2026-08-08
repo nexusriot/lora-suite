@@ -50,7 +50,9 @@ public:
     char s[48];
 
     g.setTextColor(theme::RF, theme::BG);
-    std::snprintf(s, sizeof(s), "-> Meshtastic %.3f MHz", meshtasticPresetEU868().freqHz / 1e6);
+    std::snprintf(s, sizeof(s), "-> %s %s %.4f", meshtasticRegionName(ctx.meshCfg.region),
+                  meshtasticPresetName(ctx.meshCfg.preset),
+                  meshtasticRadioCfg(ctx.meshCfg, ctx.meshCfg.preset).freqHz / 1e6);
     g.drawString(s, 6, y); y += 14;
 
     g.setTextColor(theme::TEXT, theme::BG);

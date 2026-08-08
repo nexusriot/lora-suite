@@ -14,6 +14,7 @@ g++ -std=c++17 -O2 -Wall -Wextra \
   "$root"/src/proto/meshoverlay.cpp \
   "$root"/src/proto/protobuf_lite.cpp \
   "$root"/src/proto/meshtastic.cpp \
+  "$root"/src/proto/base64.cpp \
   "$root"/src/proto/payloads.cpp \
   "$root"/src/proto/squeeze.cpp \
   "$root"/src/proto/defrag.cpp \

@@ -41,12 +41,30 @@ void aes128_key_expand(const uint8_t key[16], uint8_t rk[176]) {
   }
 }
 
-// State is column-major: byte index = 4*col + row.
-void aes128_encrypt_block(const uint8_t rk[176], const uint8_t in[16], uint8_t out[16]) {
+void aes256_key_expand(const uint8_t key[32], uint8_t rk[240]) {
+  std::memcpy(rk, key, 32);
+  for (int i = 8; i < 60; i++) {
+    uint8_t t[4];
+    std::memcpy(t, rk + (i - 1) * 4, 4);
+    if (i % 8 == 0) {
+      uint8_t tmp = t[0];              // RotWord
+      t[0] = t[1]; t[1] = t[2]; t[2] = t[3]; t[3] = tmp;
+      for (int j = 0; j < 4; j++) t[j] = sbox[t[j]];   // SubWord
+      t[0] ^= rcon[i / 8];
+    } else if (i % 8 == 4) {
+      for (int j = 0; j < 4; j++) t[j] = sbox[t[j]];   // SubWord only, no RotWord
+    }
+    for (int j = 0; j < 4; j++) rk[i * 4 + j] = rk[(i - 8) * 4 + j] ^ t[j];
+  }
+}
+
+// State is column-major: byte index = 4*col + row. `nr` is the round count, so
+// the same core serves AES-128 (10) and AES-256 (14).
+static void encryptBlock(const uint8_t* rk, int nr, const uint8_t in[16], uint8_t out[16]) {
   uint8_t s[16];
   for (int i = 0; i < 16; i++) s[i] = in[i] ^ rk[i];   // AddRoundKey (round 0)
 
-  for (int round = 1; round <= 10; round++) {
+  for (int round = 1; round <= nr; round++) {
     for (int i = 0; i < 16; i++) s[i] = sbox[s[i]];    // SubBytes
 
     uint8_t t;                                          // ShiftRows
@@ -54,7 +72,7 @@ void aes128_encrypt_block(const uint8_t rk[176], const uint8_t in[16], uint8_t o
     t = s[2]; s[2] = s[10]; s[10] = t; t = s[6]; s[6] = s[14]; s[14] = t;
     t = s[15]; s[15] = s[11]; s[11] = s[7]; s[7] = s[3]; s[3] = t;
 
-    if (round != 10) {                                  // MixColumns
+    if (round != nr) {                                  // MixColumns
       for (int c = 0; c < 4; c++) {
         uint8_t* col = s + c * 4;
         uint8_t a0 = col[0], a1 = col[1], a2 = col[2], a3 = col[3];
@@ -70,19 +88,50 @@ void aes128_encrypt_block(const uint8_t rk[176], const uint8_t in[16], uint8_t o
   std::memcpy(out, s, 16);
 }
 
-void aes128_ctr_xor(const uint8_t key[16], const uint8_t iv[16], uint8_t* data, size_t len) {
-  uint8_t rk[176];
-  aes128_key_expand(key, rk);
+void aes128_encrypt_block(const uint8_t rk[176], const uint8_t in[16], uint8_t out[16]) {
+  encryptBlock(rk, 10, in, out);
+}
+
+void aes256_encrypt_block(const uint8_t rk[240], const uint8_t in[16], uint8_t out[16]) {
+  encryptBlock(rk, 14, in, out);
+}
+
+// Shared CTR body: `rk` is an expanded schedule and `nr` its round count.
+static void ctrXor(const uint8_t* rk, int nr, const uint8_t iv[16], uint8_t* data, size_t len) {
   uint8_t ctr[16], ks[16];
   std::memcpy(ctr, iv, 16);
   size_t off = 0;
   while (off < len) {
-    aes128_encrypt_block(rk, ctr, ks);
+    encryptBlock(rk, nr, ctr, ks);
     size_t n = len - off < 16 ? len - off : 16;
     for (size_t i = 0; i < n; i++) data[off + i] ^= ks[i];
     off += n;
     for (int i = 15; i >= 0; i--) if (++ctr[i]) break;   // 128-bit big-endian increment
   }
+}
+
+void aes128_ctr_xor(const uint8_t key[16], const uint8_t iv[16], uint8_t* data, size_t len) {
+  uint8_t rk[176];
+  aes128_key_expand(key, rk);
+  ctrXor(rk, 10, iv, data, len);
+}
+
+bool aes_ctr_xor(const uint8_t* key, uint8_t keyLen, const uint8_t iv[16],
+                 uint8_t* data, size_t len) {
+  if (!key || !iv || (len && !data)) return false;
+  if (keyLen == 16) {
+    uint8_t rk[176];
+    aes128_key_expand(key, rk);
+    ctrXor(rk, 10, iv, data, len);
+    return true;
+  }
+  if (keyLen == 32) {
+    uint8_t rk[240];
+    aes256_key_expand(key, rk);
+    ctrXor(rk, 14, iv, data, len);
+    return true;
+  }
+  return false;
 }
 
 } // namespace ls

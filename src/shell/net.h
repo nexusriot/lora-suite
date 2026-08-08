@@ -42,4 +42,12 @@ bool ntpSyncViaWifi();
 bool meshtasticSendText(const char* text);
 bool meshtasticSendPosition();
 
+// Announce ourselves as a named Meshtastic node (portnum NODEINFO). Without this
+// we show up in everyone's node list — and on the map — as a bare "!xxxxxxxx".
+// Names come from ctx.meshCfg, falling back to our own callsign.
+bool meshtasticSendNodeInfo();
+
+// The long/short names actually used on the air, after those fallbacks.
+void meshtasticNames(char* longOut, size_t longCap, char* shortOut, size_t shortCap);
+
 } // namespace ls

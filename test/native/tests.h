@@ -17,6 +17,7 @@ void run_wire3_tests();
 void run_media_tests();
 void run_battlog_tests();
 void run_ircodes_tests();
+void run_base64_tests();
 void run_meshtastic_tests();
 void run_payloads_tests();
 void run_txqueue_tests();

@@ -4,6 +4,7 @@
 #include "../proto/airtime.h"
 #include "../proto/nodetable.h"
 #include "../proto/meshoverlay.h"
+#include "../proto/meshtastic.h"
 #include "../proto/roster.h"
 #include "../proto/rules.h"
 #include "../proto/ircodes.h"
@@ -30,6 +31,7 @@ struct Context {
 
   NodeTable   nodes;
   MeshOverlay mesh;       // foreign Meshtastic nodes (imported snapshot / OTA scan)
+  MeshtasticCfg meshCfg;  // which Meshtastic network we speak to (MeshCfg app)
   Roster     roster;      // durable name<->address contacts
   ArchiveLog archive;     // pending message lines to persist (drained by Archive)
   RuleEngine rules;       // Reflex automation rules

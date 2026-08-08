@@ -37,6 +37,7 @@
 #include "apps/mesh_scan.h"
 #include "apps/mesh_tx.h"
 #include "apps/mesh_chat.h"
+#include "apps/mesh_cfg.h"
 #include "apps/monitor.h"
 #include "apps/ranger.h"
 #include "apps/chronos.h"
@@ -83,6 +84,7 @@ static Sweep      sweep;
 static MeshScan   meshScan;
 static MeshTX     meshTx;
 static MeshChat   meshChat;
+static MeshCfg    meshCfgApp;
 static Monitor    monitor;
 static Ranger     ranger;
 static Chronos     chronos;
@@ -106,7 +108,7 @@ static Dropbox    dropbox;
 
 static App* apps[] = {
     &courier, &chat, &archiveApp, &recallApp, &contacts, &fleet, &relay, &beacon, &gpsApp, &radar,
-    &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &meshChat, &monitor, &ranger, &chronos, &countdownApp,
+    &meshApp, &pathfinder, &breadcrumb, &mayday, &sweep, &meshScan, &meshTx, &meshChat, &meshCfgApp, &monitor, &ranger, &chronos, &countdownApp,
     &console, &gateway, &probe, &wifiScan, &bluetooth, &settingsApp, &sdUtils, &irBlaster, &recorder, &coulomb, &ledgerApp, &reflexApp, &reactor, &klaxon, &telemetry, &dropbox};
 static const int APP_COUNT = sizeof(apps) / sizeof(apps[0]);
 
@@ -401,6 +403,7 @@ void setup() {
   }
   storage.loadRoster(ctx.roster);
   storage.loadRules(ctx.rules);
+  storage.loadMeshCfg(ctx.meshCfg);   // falls back to the public EU_868 LongFast defaults
   if (!storage.loadIrCodes(ctx.irCodes)) ctx.irCodes.loadDefaults();
 
   char psk[24] = {0};

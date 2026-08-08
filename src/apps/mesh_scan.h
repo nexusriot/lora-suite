@@ -33,6 +33,7 @@ public:
     heard_ = decoded_ = 0;
     lastMs_ = 0;
     lastRssi_ = 0;
+    preset_ = ctx.meshCfg.preset;   // start where the operator says the mesh is
     if (ctx.lora) {
       saved_ = ctx.cfg;                               // remember our own profile
       ctx.lora->setRxOnly(true);                       // receive-only: never TX here
@@ -71,10 +72,15 @@ public:
 
     char s[40];
     int y = ui::BODY_Y + 2;
+    RadioCfg rc = meshtasticRadioCfg(ctx.meshCfg, preset_);
     g.setTextColor(theme::RF, theme::BG);
-    std::snprintf(s, sizeof(s), "RX %s SF%d  %.3f", meshtasticPresetName(preset_),
-                  meshtasticPreset(preset_).sf, meshtasticPreset(preset_).freqHz / 1e6);
-    g.drawString(s, 6, y); y += 13;
+    std::snprintf(s, sizeof(s), "RX %s SF%d/%uk", meshtasticPresetName(preset_),
+                  rc.sf, (unsigned)(rc.bwHz / 1000));
+    g.drawString(s, 6, y); y += 11;
+    g.setTextColor(theme::MUTED, theme::BG);
+    std::snprintf(s, sizeof(s), "%.4f MHz  %s", rc.freqHz / 1e6,
+                  meshtasticRegionName(ctx.meshCfg.region));
+    g.drawString(s, 6, y); y += 12;
 
     g.setTextColor(theme::TEXT, theme::BG);
     std::snprintf(s, sizeof(s), "heard %lu   decoded %lu",
@@ -113,12 +119,12 @@ private:
   uint32_t heard_ = 0, decoded_ = 0, lastMs_ = 0, texts_ = 0;
   int16_t lastRssi_ = 0;
   char lastText_[64] = {0};
-  int preset_ = 0;                          // 0=LongFast (Meshtastic default), 1=MediumFast, 2=ShortFast
+  uint8_t preset_ = MPRESET_LONG_FAST;       // seeded from ctx.meshCfg on enter
   uint32_t lastCycle_ = 0;
 
   void applyPreset() {
     if (ctx.lora) {
-      ctx.lora->applyConfig(meshtasticPreset(preset_));
+      ctx.lora->applyConfig(meshtasticRadioCfg(ctx.meshCfg, preset_));
       ctx.lora->startReceive();
     }
     lastCycle_ = millis();
@@ -133,7 +139,7 @@ private:
     lastMs_ = m.when ? m.when : 1;
     lastRssi_ = m.rssi;
     MeshPacket p;
-    if (!meshtastic_decode(buf, n, MESH_DEFAULT_KEY, p)) return;
+    if (!meshtastic_decode(buf, n, ctx.meshCfg.key, ctx.meshCfg.keyLen, p)) return;
     decoded_++;
     if (p.hasPos) ctx.mesh.setPos(p.from, p.lat, p.lon, m.when, SRC_SCAN);
     if (p.hasUser) ctx.mesh.setUser(p.from, p.longName, p.shortName, mapRole(p.role), m.when, SRC_SCAN);

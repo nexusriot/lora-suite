@@ -1,6 +1,6 @@
 # LoRa Suite — Feature Backlog & Roadmap
 
-## Built so far (36 apps + cross-cutting)
+## Built so far (39 apps + cross-cutting)
 
 The original 12 apps (Courier, Relay, Beacon, Radar, Breadcrumb, Sweep, Monitor,
 Ranger, Console, Klaxon, Telemetry, Dropbox) plus, from these backlogs:
@@ -22,7 +22,14 @@ working **fragmentation** (messages up to 480 chars). The latest round is
 all-device: **Memos** (voice recorder — the ES8311 microphone was the last
 untouched peripheral), **Coulomb** (battery history + discharge forecast), a
 global **`=` screenshot** hotkey writing BMPs to SD, and **IR codes moved into
-NVS** so the remote is programmable from the phone.
+NVS** so the remote is programmable from the phone. The newest round makes the
+Meshtastic side genuinely usable: a **MeshCfg** app owning one `MeshtasticCfg`
+(region / modem preset / channel name / PSK / announced identity) that every
+Meshtastic path now reads instead of hardcoding the public channel, **complete
+region and preset tables** with the frequency derived the way the firmware does it
+(the old code pinned a single bandwidth and was therefore deaf to the narrowband
+presets), **private channels** via base64 PSK parsing plus AES-256, and **NodeInfo
+announce** — without which we appeared on every node list as a bare `!xxxxxxxx`.
 Everything below is what remains — see [DESIGN.md](DESIGN.md) for how the built
 parts fit together.
 

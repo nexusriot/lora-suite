@@ -1,7 +1,7 @@
 # LoRa Suite — Cardputer-Adv × Cap LoRa868
 
 A multi-function LoRa toolkit for the **M5Stack Cardputer-Adv** with the
-**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **38** keyboard-driven
+**Cap LoRa868** module (SX1262 radio + ATGM336H GPS). **39** keyboard-driven
 apps share one 13-byte wire protocol, one duty-cycle governor, and the module's GPS.
 
 **Location:** `/home/vlad/workspace/my/lora-suite`
@@ -56,10 +56,11 @@ can never interleave with a radio transaction. See `src/hal/`.
 | PF | Pathfinder | Capture/share waypoints and home to a target — bearing arrow + range + closing speed |
 | TRK | Breadcrumb | Logs track + heard nodes to microSD (CSV), GPS-timestamped |
 | SOS | Mayday | Distress + dead-man switch — confirmed panic, IMU-stillness auto-trigger, homing view for received distress |
-| SWP | Sweep | RSSI scan across a channel plan, waterfall bars; `m` jumps to the EU_868 Meshtastic band |
-| SCAN | MeshScan | Over-the-air Meshtastic receiver — sweeps the LongFast/MediumFast/ShortFast presets, decrypts the public channel, decodes position/name/telemetry/text into Mesh (Direction B) |
-| MTX | MeshTX | Send text (Enter) or your GPS position (Tab) INTO the Meshtastic public channel — two-way interop |
-| MCHT | MeshChat | Two-way conversation on the Meshtastic public channel — RX + TX text in one feed; Tab cycles preset |
+| SWP | Sweep | RSSI scan across a channel plan, waterfall bars; `m` jumps to the configured Meshtastic channel |
+| SCAN | MeshScan | Over-the-air Meshtastic receiver — sweeps all nine modem presets, decrypts the configured channel, decodes position/name/telemetry/text into Mesh (Direction B) |
+| MTX | MeshTX | Send text (Enter) or your GPS position (Tab) INTO the configured Meshtastic channel — two-way interop |
+| MCHT | MeshChat | Two-way conversation on the Meshtastic channel — RX + TX text in one feed; Tab cycles preset |
+| MCFG | MeshCfg | Which Meshtastic network to join — region, modem preset, channel name + PSK, and the name/role you announce; `a` announces NodeInfo, `s` saves to NVS |
 | MON | Monitor | Promiscuous frame monitor (type / addr / RSSI / SNR) |
 | RNG | Ranger | Ping/echo link test — RSSI, SNR, RTT, loss, distance |
 | TIME | Chronos | Mesh time-sync (GPS→TIMESYNC) for the RTC-less fleet + daylight-length almanac; `n` = NTP-over-WiFi time fallback |
@@ -90,7 +91,7 @@ can never interleave with a radio transaction. See `src/hal/`.
 - **Airtime attribution** — every transmission carries a non-wire `airTag` (its type, or a relay bucket) charged to the **Ledger** (`AirLedger`) at send time, so you can see what's eating the duty budget; a daily total is appended to `/duty.csv`.
 - **Message capture** — received/sent text is deduped (a dedicated `rxDedup`, so relayed copies count once) and queued to `ctx.archive`, which **Archive** drains to SD from its background tick (never on the radio RX path).
 - **Reflex** — an on-device event→action rule engine: frame events (RX-type, alert) evaluate in the RX handler, timer/battery events on `background()`; actions run through the duty-gated send path with per-rule cooldowns + a self-src guard so automation can't loop.
-- **Meshtastic interop** — foreign Meshtastic nodes (imported from meshmap.net, or heard over the air by **MeshScan**) live in a `MeshOverlay` kept out of the peer table; shown in **Mesh** + on **Radar**. **Gateway** uplinks our own frames to a host. See [Meshtastic interoperability](#meshtastic-interoperability).
+- **Meshtastic interop** — **MeshCfg** holds the target network (region / preset / channel / PSK / announced identity) and every Meshtastic path reads it. Foreign nodes (imported from meshmap.net, or heard over the air by **MeshScan**) live in a `MeshOverlay` kept out of the peer table; shown in **Mesh** + on **Radar**. **Gateway** uplinks our own frames to a host. See [Meshtastic interoperability](#meshtastic-interoperability).
 
 Keys: arrows are the `;` `.` `,` `/` cluster, `` ` `` is ESC/back, `Enter`
 confirms, `\` arms a global distress confirm (ignored while typing). Each app
@@ -127,10 +128,11 @@ mixed-firmware nodes fail closed rather than mis-parsing. v3 added:
 ## Meshtastic interoperability
 
 lora-suite is **not** Meshtastic — different framing, addressing and crypto — but
-it shares the SX1262 and the 868 band, so it can *observe* the local Meshtastic
-world three ways. Foreign nodes live in a `MeshOverlay` kept out of the peer
-`NodeTable` (never messaged or relayed); they show in the **Mesh** app and as
-hollow markers on **Radar**.
+it shares the SX1262 and the 868 band, so it can both *observe* and *join* the
+local Meshtastic world. Which network it talks to is set in **MeshCfg** (region,
+modem preset, channel name, PSK, and the identity it announces); foreign nodes live
+in a `MeshOverlay` kept out of the peer `NodeTable` (never messaged or relayed) and
+show in the **Mesh** app and as hollow markers on **Radar**.
 
 ### Import from meshmap.net (Direction A)
 
@@ -162,15 +164,46 @@ id (uint32), lat/lon (deg), batt (0–255; >100 = externally powered), volt
 MQTT), hw (≤9 chars), short (≤4). `tools/meshpull` and the device parser
 (`src/proto/meshoverlay.h`) share this format and are both unit-tested.
 
+### Choose the network — MeshCfg
+
+**MeshCfg** (`MCFG`) is where a Meshtastic network is joined; everything else reads
+the result (`ctx.meshCfg`). Fields, Console-style — up/down to pick, left/right to
+change an enumerated one, `Enter` to type into a text one:
+
+| Field | Meaning |
+|---|---|
+| REGION | Band plan (EU_868, US, ANZ, JP … 13 regions) — sets the frequency range and power ceiling |
+| PRESET | Modem preset (LongFast … ShortTurbo). **Bandwidth is not constant**: the Long/VeryLong presets are narrowband, so a receiver on the wrong one hears nothing |
+| CHAN | Channel name; blank means the primary channel, which Meshtastic names after the preset |
+| PSK | Channel key as base64 — `AQ==` (the public default), a 16-byte key (AES-128) or a 32-byte key (AES-256). `AA==` disables encryption |
+| LONG / SHORT | The names you appear under; blank falls back to your callsign |
+| ROLE | Advertised device role — default `MUTE`, which is honest since we do not rebroadcast Meshtastic traffic |
+| ANNC | NodeInfo auto-announce period (off / 15 / 30 / 60 min) |
+
+The right column shows what those settings actually put on the air: centre
+frequency, SF/BW/CR, which channel slot of how many, the header channel hash, your
+`!id` and the power limit. The frequency is derived the way the firmware does it
+(`freqStart + bw/2 + slot*bw`), which is why EU_868 + a 250 kHz preset reproduces
+the familiar 869.525 MHz.
+
+`a` announces **NodeInfo** immediately — without it you appear in everyone's node
+list, and on the map, as a bare `!xxxxxxxx` with no name. `s` saves to NVS.
+
+> Typing a PSK: the keyboard maps `/` to the right-arrow, so a standard-base64 key
+> containing `/` cannot be entered. Use the URL-safe spelling (`-` and `_`); both
+> alphabets decode identically.
+
 ### Scan over the air — MeshScan (Direction B)
 
-**MeshScan** (`SCAN`) retunes the radio to the EU_868 / MEDIUM_FAST preset (869.525
-MHz), goes receive-only, and decrypts the public channel (the `AQ==` key) — decoded
-Position/NodeInfo land in the overlay with live RSSI. `Enter` jumps to the Mesh
-list. **One radio: while this screen is open you are deaf to your own mesh.** The
-decode chain (AES-128-CTR + a protobuf-lite reader, `src/proto/meshtastic.*`) is
-host-tested; the exact key/nonce/modem constants are marked to verify against the
-Meshtastic firmware on bring-up. Preview the raw band energy first with **Sweep** → `m`.
+**MeshScan** (`SCAN`) retunes the radio to the configured region/channel, goes
+receive-only, and decrypts with the configured key — decoded Position/NodeInfo land
+in the overlay with live RSSI. It starts on the preset MeshCfg names and cycles
+through all nine every 15 s (`n` advances now), because a network on a preset you
+are not tuned to is simply inaudible. `Enter` jumps to the Mesh list. **One radio:
+while this screen is open you are deaf to your own mesh.** The codec (AES-128/256-CTR
++ a protobuf-lite reader, `src/proto/meshtastic.*`) is host-tested; the exact
+key/nonce/preset/hash constants are marked to verify against the Meshtastic
+firmware on bring-up. Preview the raw band energy first with **Sweep** → `m`.
 
 ### Uplink your fleet — Gateway (Direction C2)
 
@@ -196,7 +229,7 @@ src/
   services/  lora · gps · storage · clock · audio · ir                     (device)
   shell/     context · net · screen_manager · launcher                     (device)
   ui/        theme · widgets                                               (device)
-  apps/      38 apps                                                       (device)
+  apps/      39 apps                                                       (device)
   hal/       pins · spi_bus                                                (device)
   main.cpp
 test/native/    host unit tests (g++)

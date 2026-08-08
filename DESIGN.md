@@ -1,6 +1,6 @@
 # LoRa Suite — Design
 
-A multi-app LoRa toolkit (38 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
+A multi-app LoRa toolkit (39 apps) for the **M5Stack Cardputer-Adv** + **Cap LoRa868**
 (SX1262 radio + ATGM336H GPS), at `/home/vlad/workspace/my/lora-suite`. This document
 is the maintainable companion to the rendered [design brief](docs/design-brief.html);
 see [ROADMAP.md](ROADMAP.md) for the feature backlog and [README.md](README.md) for
@@ -26,6 +26,7 @@ ui/        theme (RGB565 palette) · widgets (header/footer/status bar)
 services/  lora (RadioLib SX1262) · gps (TinyGPSPlus) · storage (NVS+SD) · clock · audio · ir
 proto/     frame · airtime · duty · dedup · nodetable · geo · payloads · qos · txqueue
            roster · solar · ledger · rules · meshoverlay · meshtastic · protobuf_lite · nec
+           base64
            squeeze · defrag · wavfmt · bmp · battlog · ircodes    (portable, tested)
 crypto/    chacha20 · channel · aes · sha256 (HMAC/HKDF)          (portable, tested)
 hal/       pins.h · spi_bus (shared radio+SD mutex)
@@ -41,6 +42,7 @@ during text entry), and `drawIcon` (a 20×20 vector glyph for the launcher).
 
 ### Shared state — `ctx` (`shell/context.h`)
 One global `Context`: `NodeTable`, `MeshOverlay` (foreign Meshtastic nodes),
+`MeshtasticCfg` (which Meshtastic network we join),
 `Roster`, `ArchiveLog`, `RuleEngine`, active
 `Channel`/`RadioCfg`, identity, power/presence, unread counter, a cross-app nav
 intent (`navRequest`/`pendingPeer`), and countdown state. Apps read/write it;
@@ -130,22 +132,42 @@ encrypt → MAC. **RX** — verify MAC → decrypt → reassemble → decompress
   `distress`, `countdown`, `gw`, `meshtx`, `ntp`. The `android/` companion app
   (Kotlin/Compose) groups these into a bottom-nav (Messages/Fleet/Mesh/Ops) + Config.
   BLE + WiFi share the 2.4 GHz radio, so they're not run simultaneously.
-- **Meshtastic interop** — three ways to observe the foreign Meshtastic world on
-  the shared 868 band, all feeding a `MeshOverlay` kept apart from `NodeTable`
+- **Meshtastic interop** — observing *and* joining the foreign Meshtastic world on
+  the shared 868 band. **`MeshtasticCfg` (`proto/meshtastic.h`, edited by the
+  MeshCfg app, persisted in NVS) is the single source of truth** for region, modem
+  preset, channel name, PSK and announced identity; every path below reads it
+  rather than hardcoding the public channel. Discovered nodes feed a
+  `MeshOverlay` kept apart from `NodeTable`
   (situational-awareness only — never relayed/ACKed/addressed; keyed by 32-bit
   node numbers; source-tagged `SRC_IMPORT`/`SRC_SCAN`):
   - **Import (A)** — `tools/meshpull` trims the ~3.7 MB meshmap.net feed to an SD
     CSV; the **Mesh** app parses it (comma-tolerant long names, `# generated`
     time, rows dim by last-heard) and **Radar** plots distinct markers.
-  - **Scan (B, RX)** — **MeshScan** retunes the SX1262 and sweeps the LongFast/
-    MediumFast/ShortFast presets (SF11/9/7 at 869.525 MHz), sets `LoRaService`
-    receive-only (so no app airs our frames on their channel), and decodes raw
-    packets via `proto/meshtastic` (16-byte header + AES-128-CTR + `protobuf_lite`
-    → Text/Position/NodeInfo/Telemetry) into `SRC_SCAN` entries. A raw-RX tap
-    (`onRawReceive`) delivers the bytes; `crypto/aes` does the decrypt.
+  - **Config** — **MeshCfg** edits `ctx.meshCfg`. Frequency is *derived*, not
+    hardcoded: a 13-entry region table (freq range + spacing + power ceiling) and a
+    9-entry preset table (SF/BW/CR — bandwidth is **not** constant, which is why a
+    single-bandwidth scanner is deaf to the narrowband presets) feed the firmware's
+    own formula `freqStart + bw/2 + slot*bw`, with `slot = hash(name) % slots`. For
+    EU_868 + a 250 kHz preset that reproduces 869.525 MHz. The header channel hash
+    stays `xorHash(name) ^ xorHash(key)`. PSKs are parsed from base64 with
+    Meshtastic's shorthand (1 byte: 0 = off, n = default key offset by n-1), taking
+    16-byte (AES-128) or 32-byte (AES-256) keys.
+  - **Scan (B, RX)** — **MeshScan** retunes the SX1262 and sweeps all nine presets,
+    starting on the configured one, sets `LoRaService` receive-only (so no app airs
+    our frames on their channel), and decodes raw packets via `proto/meshtastic`
+    (16-byte header + AES-CTR + `protobuf_lite` → Text/Position/NodeInfo/Telemetry)
+    into `SRC_SCAN` entries. A raw-RX tap (`onRawReceive`) delivers the bytes;
+    `crypto/aes` does the decrypt.
   - **Scan (B, TX)** — **MeshTX** encodes a text or a Position (protobuf writer +
     AES-CTR + per-preset channel hash) and `LoRaService::transmitRaw`s it onto the
-    public channel; **MeshChat** is a full RX+TX conversation on it — two-way interop.
+    configured channel; **MeshChat** is a full RX+TX conversation on it. All three
+    encoders share one `buildFrame` helper.
+  - **Identity** — `meshtasticSendNodeInfo()` broadcasts a User protobuf (id /
+    long+short name / hw_model `PRIVATE_HW` / role, default `CLIENT_MUTE` since we
+    never rebroadcast their traffic). Without it we appear as a bare `!xxxxxxxx`
+    everywhere. MeshCfg's `a` sends one; `MeshCfg::background()` repeats it on an
+    opt-in timer (off by default — each announce retunes the radio, so we go
+    briefly deaf to our own channel).
   - **Uplink (C2)** — **Gateway** re-encodes every heard frame and streams it out
     the USB serial console as JSON from the RX chokepoint (background, any app
     open); `tools/lorakit` (a byte-compatible Go codec + `dissect` CLI) consumes
@@ -168,10 +190,13 @@ encrypt → MAC. **RX** — verify MAC → decrypt → reassemble → decompress
 
 - Host: `bash test/native/run.sh` — frame codec, airtime, duty (+next-TX),
   Marshal queue, dedup, node table + geo, roster, solar, ChaCha20/channel crypto,
-  **AES-128 (FIPS-197) + CTR**, the **Meshtastic frame decode** (header + AES-CTR
-  + protobuf → Text/Position/NodeInfo/Telemetry) + the text/position **encoders** round-trip
-  + EU_868 preset, the Meshtastic overlay + CSV parser, ledger, rules, and all
-  payload codecs. Pure C++, no board required.
+  **AES-128 and AES-256 (FIPS-197) + CTR**, base64 (RFC 4648, both alphabets), the
+  **Meshtastic frame decode** (header + AES-CTR + protobuf →
+  Text/Position/NodeInfo/Telemetry) + the text/position/**nodeinfo** encoders
+  round-trip, the region/preset tables and frequency derivation (EU_868 LongFast
+  must land on 869.525 MHz), PSK parsing incl. an end-to-end AES-256 private
+  channel, the Meshtastic overlay + CSV parser, ledger, rules, and all payload
+  codecs. Pure C++, no board required.
   The Go host tools `tools/meshpull` and `tools/lorakit` have their own `go test`s.
 - Device: `pio run -e cardputer-adv` builds the full firmware clean (RadioLib 6.x,
   TinyGPSPlus, M5Cardputer; ~18% RAM / ~20% flash on the StampS3). `-t upload` to

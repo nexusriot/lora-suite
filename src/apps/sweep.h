@@ -40,8 +40,8 @@ public:
   void onKey(const KeyEvent& k) override {
     if (k.up) stepHz_ += 100000;
     else if (k.down && stepHz_ > 100000) stepHz_ -= 100000;
-    else if (k.ch == 'm') {                        // jump to the EU_868 Meshtastic band
-      uint32_t f = meshtasticPresetEU868().freqHz;  // 869.525 MHz, centred
+    else if (k.ch == 'm') {                        // jump to the configured Meshtastic channel
+      uint32_t f = meshtasticFrequencyHz(ctx.meshCfg, ctx.meshCfg.preset);   // centred
       stepHz_ = 25000;
       base_ = f - (uint32_t)(N / 2) * stepHz_;
       peak_ = -128;

@@ -24,6 +24,7 @@ int main() {
   run_media_tests();
   run_battlog_tests();
   run_ircodes_tests();
+  run_base64_tests();
   run_meshtastic_tests();
   run_payloads_tests();
   run_txqueue_tests();

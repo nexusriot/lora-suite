@@ -36,7 +36,8 @@ public:
     else if (k.ch == 's' && ctx.store) ctx.store->saveProfile(slot_, ctx.cfg, "");
     else if (k.ch == 'l' && ctx.store) { char psk[24]; ctx.store->loadProfile(slot_, ctx.cfg, psk, sizeof(psk)); apply(); }
     else if (k.ch == 'r') region_ = (region_ + 1) % 3, applyRegion();
-    else if (k.ch == 'm') { ctx.cfg = meshtasticPresetEU868(); apply(); }  // tune to the local Meshtastic mesh
+    // tune our own radio to whatever MeshCfg says the local Meshtastic mesh uses
+    else if (k.ch == 'm') { ctx.cfg = meshtasticRadioCfg(ctx.meshCfg, ctx.meshCfg.preset); apply(); }
   }
 
   void draw(M5Canvas& g) override {

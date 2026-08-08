@@ -310,24 +310,44 @@ bool ntpSyncViaWifi() {
 
 static uint32_t s_meshSeq = 0;
 
-// Retune to the Meshtastic preset, air one raw encoded packet, restore our config.
+// Retune to the configured Meshtastic preset, air one raw encoded packet, restore
+// our config. While this runs we are off our own channel, so it is deliberately
+// one packet per call.
 static bool meshTxRaw(const uint8_t* frame, size_t n) {
   if (!frame || n == 0) return false;
   RadioCfg saved = ctx.cfg;
-  ctx.lora->applyConfig(meshtasticPresetEU868());
+  ctx.lora->applyConfig(meshtasticRadioCfg(ctx.meshCfg, ctx.meshCfg.preset));
   bool ok = ctx.lora->transmitRaw(frame, n);
   ctx.lora->applyConfig(saved);
   ctx.lora->startReceive();
   return ok;
 }
 
+static uint32_t meshPacketId() { return ((uint32_t)millis() << 8) ^ (++s_meshSeq); }
+
+void meshtasticNames(char* longOut, size_t longCap, char* shortOut, size_t shortCap) {
+  const char* ln = ctx.meshCfg.longName[0] ? ctx.meshCfg.longName : ctx.callName;
+  strncpy(longOut, ln, longCap - 1);
+  longOut[longCap - 1] = 0;
+
+  if (ctx.meshCfg.shortName[0]) {
+    strncpy(shortOut, ctx.meshCfg.shortName, shortCap - 1);
+    shortOut[shortCap - 1] = 0;
+  } else {
+    // Meshtastic short names are <=4 bytes; take the head of the long name.
+    size_t n = strnlen(longOut, shortCap - 1);
+    memcpy(shortOut, longOut, n);
+    shortOut[n] = 0;
+  }
+}
+
 bool meshtasticSendText(const char* text) {
   if (!ctx.lora || !text || !text[0]) return false;
   uint8_t frame[128];
-  uint32_t pid = ((uint32_t)millis() << 8) ^ (++s_meshSeq);
-  uint32_t from = 0x4C530000u | ctx.myAddr;   // our Meshtastic-style node id (VERIFY)
-  size_t n = meshtastic_encode_text(from, pid, meshtasticDefaultChannelHash(),
-                                    text, MESH_DEFAULT_KEY, frame, sizeof(frame));
+  size_t n = meshtastic_encode_text(meshtasticNodeId(ctx.meshCfg, ctx.myAddr), meshPacketId(),
+                                    meshtasticChannelHash(ctx.meshCfg, ctx.meshCfg.preset),
+                                    text, ctx.meshCfg.key, ctx.meshCfg.keyLen,
+                                    frame, sizeof(frame));
   return meshTxRaw(frame, n);
 }
 
@@ -336,11 +356,24 @@ bool meshtasticSendPosition() {
   int32_t latI = (int32_t)(ctx.gps->lat() * 1e7);
   int32_t lonI = (int32_t)(ctx.gps->lon() * 1e7);
   uint8_t frame[128];
-  uint32_t pid = ((uint32_t)millis() << 8) ^ (++s_meshSeq);
-  uint32_t from = 0x4C530000u | ctx.myAddr;
-  size_t n = meshtastic_encode_position(from, pid, meshtasticDefaultChannelHash(),
+  size_t n = meshtastic_encode_position(meshtasticNodeId(ctx.meshCfg, ctx.myAddr), meshPacketId(),
+                                        meshtasticChannelHash(ctx.meshCfg, ctx.meshCfg.preset),
                                         latI, lonI, (int32_t)ctx.gps->altM(),
-                                        MESH_DEFAULT_KEY, frame, sizeof(frame));
+                                        ctx.meshCfg.key, ctx.meshCfg.keyLen,
+                                        frame, sizeof(frame));
+  return meshTxRaw(frame, n);
+}
+
+bool meshtasticSendNodeInfo() {
+  if (!ctx.lora) return false;
+  char ln[20], sn[5];
+  meshtasticNames(ln, sizeof(ln), sn, sizeof(sn));
+  uint8_t frame[160];
+  size_t n = meshtastic_encode_nodeinfo(meshtasticNodeId(ctx.meshCfg, ctx.myAddr), meshPacketId(),
+                                        meshtasticChannelHash(ctx.meshCfg, ctx.meshCfg.preset),
+                                        ln, sn, MESH_HW_PRIVATE, ctx.meshCfg.role,
+                                        ctx.meshCfg.key, ctx.meshCfg.keyLen,
+                                        frame, sizeof(frame));
   return meshTxRaw(frame, n);
 }
 

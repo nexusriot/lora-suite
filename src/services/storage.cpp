@@ -96,6 +96,18 @@ bool Storage::loadMeshImport(MeshOverlay& mesh, uint32_t now) {
   return true;
 }
 
+bool Storage::loadMeshCfg(MeshtasticCfg& cfg) {
+  if (s_prefs.getBytesLength("meshcfg") != sizeof(MeshtasticCfg)) return false;
+  MeshtasticCfg tmp;
+  if (s_prefs.getBytes("meshcfg", &tmp, sizeof(tmp)) != sizeof(tmp)) return false;
+  cfg = tmp;
+  return true;
+}
+
+void Storage::saveMeshCfg(const MeshtasticCfg& cfg) {
+  s_prefs.putBytes("meshcfg", &cfg, sizeof(cfg));
+}
+
 void Storage::loadSettings(uint8_t& brightness, uint8_t& volume) {
   brightness = (uint8_t)s_prefs.getUChar("bright", 26);   // 10% default
   volume = (uint8_t)s_prefs.getUChar("vol", 200);

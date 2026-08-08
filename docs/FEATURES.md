@@ -5,7 +5,7 @@ explanatory companion to the terse app table in [../README.md](../README.md) and
 the architecture in [../DESIGN.md](../DESIGN.md).
 
 The device is an **M5Stack Cardputer-Adv** with the **Cap LoRa868** module
-(SX1262 radio + GPS). 38 keyboard-driven apps share one radio, one 13-byte wire
+(SX1262 radio + GPS). 39 keyboard-driven apps share one radio, one 13-byte wire
 protocol, one duty-cycle budget, and the module's GPS.
 
 **Keys everywhere:** the `;` `.` `,` `/` cluster is ↑ ↓ ← → · **Enter** confirms /
@@ -45,26 +45,28 @@ saves a screenshot (both ignored while typing). Each app shows its own extra key
 
 ## Meshtastic interoperability
 
-lora-suite is **not** Meshtastic, but shares the 868 band, so it can *observe* the
-local Meshtastic world three ways. See the dedicated section in
+lora-suite is **not** Meshtastic, but shares the 868 band, so it can both *observe*
+and *join* the local Meshtastic world. **Start in MeshCfg** — it decides which
+network everything else talks to. See the dedicated section in
 [../README.md](../README.md#meshtastic-interoperability) for commands.
 
 | App | For what | How |
 |---|---|---|
+| **MeshCfg** (MCFG) | **Where you join a Meshtastic network.** Pick the region and modem preset, type a channel name and PSK, and set the name/role you appear under. Everything else — MeshScan, MeshChat, MeshTX, Sweep `m`, Console `m` — follows this. Also the only way to be *visible*: without a NodeInfo announce you show up in everyone's node list as a bare `!xxxxxxxx`. | ↑↓ pick a field, ←→ change an enumerated one, **Enter** to type into a text one. **`a` announces NodeInfo now**, `s` saves to NVS. The right column shows the resulting frequency, SF/BW, channel slot, hash and your `!id`. |
 | **Mesh** (MESH) | See nearby **Meshtastic** nodes (imported from meshmap.net, and/or heard by MeshScan) as read-only situational awareness — you can't message them, but you can see where they are and how fresh they are. | `r` reloads the SD import; ↑↓ scroll; **Enter** opens a full node card (name, hardware, battery/voltage, position, last-heard). Rows dim as they age. |
-| **MeshScan** (SCAN) | Passively **receive** the local Meshtastic mesh over the air — decrypts the public channel and drops decoded **positions, names, device telemetry (battery/voltage) and text messages** into Mesh with live signal strength. **Sweeps the LongFast / MediumFast / ShortFast presets** so it catches nodes whatever preset they use (LongFast is the global default). | Open it and it auto-cycles presets every ~15 s (`n` = next now); Enter jumps to the Mesh list, `c` clears counters. **One radio: while open you can't hear your own mesh.** |
-| **MeshTX** (MTX) | **Send** into the local Meshtastic public channel — broadcast a short text, or your GPS position, that real Meshtastic nodes (and meshmap.net) can see. | Type + Enter sends text; **Tab** broadcasts your current GPS position. Retunes to the Meshtastic preset for the send, then restores. Airs on a shared public channel — be a good neighbour. |
-| **MeshChat** (MCHT) | A real **two-way conversation** on the Meshtastic public channel — incoming + outgoing text in one feed, like chatting with actual Meshtastic users. The culmination of the interop work. | Type + Enter to send; incoming text scrolls in; **Tab** cycles the preset (LongFast/MediumFast/ShortFast). One radio: deaf to your own mesh while open. |
+| **MeshScan** (SCAN) | Passively **receive** the local Meshtastic mesh over the air — decrypts the configured channel and drops decoded **positions, names, device telemetry (battery/voltage) and text messages** into Mesh with live signal strength. **Sweeps all nine modem presets**, since the Long/VeryLong ones are narrowband and a receiver on the wrong bandwidth hears nothing at all. | Starts on the preset MeshCfg names, then auto-cycles every ~15 s (`n` = next now); Enter jumps to the Mesh list, `c` clears counters. **One radio: while open you can't hear your own mesh.** |
+| **MeshTX** (MTX) | **Send** into the configured Meshtastic channel — broadcast a short text, or your GPS position, that real Meshtastic nodes (and meshmap.net) can see. | Type + Enter sends text; **Tab** broadcasts your current GPS position. Retunes to the Meshtastic preset for the send, then restores. On a public channel — be a good neighbour. |
+| **MeshChat** (MCHT) | A real **two-way conversation** on the Meshtastic channel — incoming + outgoing text in one feed, like chatting with actual Meshtastic users. | Type + Enter to send; incoming text scrolls in; **Tab** cycles the preset. One radio: deaf to your own mesh while open. |
 | **Gateway** (GW) | Uplink **your own** mesh to a computer — streams every frame you hear out USB serial as JSON, to feed the `dissect` tool or a self-hosted map of your fleet. | Enter toggles uplink on/off; runs in the background so you can use other apps. |
 
 ## RF & diagnostics
 
 | App | For what | How |
 |---|---|---|
-| **Sweep** (SWP) | See what's on the air — a live RSSI waterfall across a band, to spot activity or interference. | ↑↓ change step; **`m`** jumps to the EU_868 Meshtastic band (869.525 MHz). |
+| **Sweep** (SWP) | See what's on the air — a live RSSI waterfall across a band, to spot activity or interference. | ↑↓ change step; **`m`** jumps to the Meshtastic channel configured in MeshCfg. |
 | **Monitor** (MON) | Watch raw frames off the air (type / address / RSSI / SNR) — a promiscuous sniffer for our protocol. | Just open it; frames scroll as they arrive. |
 | **Ranger** (RNG) | Test a link to another node — ping/echo giving RSSI, SNR, round-trip time, loss and distance. | Aim at a peer; reads out link quality. |
-| **Console** (CFG) | Tune the radio and understand the trade-offs — edit frequency/SF/BW/CR/power and see live airtime, duty budget and link budget. | ↑↓ pick a field, ←→ change it; `r` cycles region; **`m`** applies the Meshtastic preset; s/l save/load a profile. |
+| **Console** (CFG) | Tune the radio and understand the trade-offs — edit frequency/SF/BW/CR/power and see live airtime, duty budget and link budget. | ↑↓ pick a field, ←→ change it; `r` cycles region; **`m`** applies the MeshCfg Meshtastic settings; s/l save/load a profile. |
 | **Ledger** (LOG) | See what's eating your 1% duty budget — per-message-type airtime accounting + a daily SD summary. | Read-only breakdown. |
 | **Probe** (PRB) | Hardware self-test — scans the I2C bus and reports radio / GPS / SD / keyboard / board status on one screen. The fastest way to spot a wiring or detection fault (e.g. a missing keyboard chip). | `r` re-scans. |
 | **WiFi** (WIFI) | Scan nearby WiFi access points (SSID / signal / channel / secured) using the otherwise-unused 2.4 GHz radio — a quick site survey. | `r` re-scans, `↑`/`↓` scroll. |
